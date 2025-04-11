@@ -101,7 +101,11 @@ export function buildCategoryEntries(libraryId: string, user: InternalUser): XML
         builder.create('entry', { headless: true })
             .ele('id', 'genres').up()
             .ele('title', `Tags/Genres`).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/genres`}).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/genres`}).up(),
+        builder.create('entry', { headless: true })
+            .ele('id', 'series').up()
+            .ele('title', `Series`).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/series`}).up()
     ]
 
 }

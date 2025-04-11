@@ -53,6 +53,7 @@ const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) 
     narrators: item.media.metadata?.narratorName
         ? item.media.metadata.narratorName.split(',').map((narrator: string) => ({ name: narrator }))
         : [],
+    series: item.media.metadata?.seriesName.split(',').map((s: string) => s.replace(/#.*$/, '').trim()) || [],
     format: item.media.ebookFormat
 })).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks);
 
@@ -133,7 +134,11 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
                     item.genres && item.genres.some((genre: any) => genre.match(new RegExp(req.query.name as string, 'i'))) ||
                     item.tags && item.tags.some((tag: any) => tag.match(new RegExp(req.query.name as string, 'i')))
                 );
-            }  else {
+            } else if(req.query.type === 'series') {
+                return (
+                    item.series && item.series.some((series: any) => series.match(new RegExp(req.query.name as string, 'i')))
+                );
+            } else {
                 return (
                     (item.title && item.title.match(search)) ||
                     (item.subtitle && item.subtitle.match(search)) ||
@@ -194,7 +199,7 @@ app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: 
         res.status(401).send('Unauthorized');
         return;
     }
-    if(req.params.type !== 'authors' && req.params.type !== 'narrators' && req.params.type !== 'genres') {
+    if(req.params.type !== 'authors' && req.params.type !== 'narrators' && req.params.type !== 'genres' && req.params.type !== 'series') {
         res.status(400).send('Invalid type');
         return;
     }
@@ -235,6 +240,11 @@ app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: 
             });
             item.tags.forEach((tag: any) => {
                 distinctType.add(tag.trim());
+            });
+        }
+        if (req.params.type === 'series') {
+            item.series.forEach((series: any) => {
+                distinctType.add(series.trim());
             });
         }
     });
