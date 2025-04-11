@@ -1,0 +1,12 @@
+services:
+  opds:
+    build:
+      context: .
+    container_name: abs-opds
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      - ABS_URL=https://audiobooks.dev
+      - OPDS_USERS=demo:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhNzQ1ZjAyZi03NmIyLTQ1N2ItOWY2MC0yNzFmZWQzYTNlMjEiLCJ1c2VybmFtZSI6ImRlbW8iLCJpYXQiOjE3MzI0NzIyOTJ9.FGKHLczOJgdHUTIta1y_VlgUbJtZp902utXhUZy-7GE,user_2:apikey_2:optional_password_2
+      - OPDS_PAGE_SIZE=20
