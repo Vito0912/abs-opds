@@ -74,12 +74,45 @@ export function buildOPDSXMLSkeleton(id: string, title: string, entriesXML: XMLN
 
 export function buildLibraryEntries(libraries: Library[], user: InternalUser): XMLNode[] {
     // Create entries without XML declaration by using builder options
-    return libraries.map(library => {
-        return builder.create('entry', { headless: true })
+    return libraries.flatMap(library => [
+        builder.create('entry', { headless: true })
             .ele('id', library.id).up()
             .ele('title', library.name).up()
             .ele('updated', new Date().toISOString()).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${library.id}`}).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${library.id}`}).up(),
+        builder.create('entry', { headless: true })
+            .ele('id', library.id).up()
+            .ele('title', `${library.name} (Categories)`).up()
+            .ele('updated', new Date().toISOString()).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${library.id}?categories=true`}).up()
+    ]);
+}
+
+export function buildCategoryEntries(libraryId: string, user: InternalUser): XMLNode[] {
+    return [
+        builder.create('entry', { headless: true })
+            .ele('id', 'authors').up()
+            .ele('title', `Authors`).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/authors`}).up(),
+        builder.create('entry', { headless: true })
+            .ele('id', 'narrators').up()
+            .ele('title', `Narrators`).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/narrators`}).up(),
+        builder.create('entry', { headless: true })
+            .ele('id', 'genres').up()
+            .ele('title', `Tags/Genres`).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/genres`}).up()
+    ]
+
+}
+
+export function buildCardEntries(items: string[], type: string, user: InternalUser, libraryId: string): XMLNode[] {
+    return items.map(item => {
+        return builder.create('entry', { headless: true })
+            .ele('id', item.toLowerCase().replace(' ', '-')).up()
+            .ele('title', item).up()
+            .ele('updated', new Date().toISOString()).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}?name=${item}&type=${type}`}).up()
     });
 }
 

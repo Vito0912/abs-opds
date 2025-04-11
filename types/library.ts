@@ -14,6 +14,7 @@ export type LibraryItem = {
     publishedYear: string
     language: string
     authors: Author[]
+    narrators: Author[]
     genres: string[]
     tags: string[]
     format: string

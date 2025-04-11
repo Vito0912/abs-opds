@@ -1,7 +1,14 @@
 import express, { Request, Response } from 'express';
 import { InternalUser } from "./types/internal";
 import dotenv from 'dotenv';
-import { buildItemEntries, buildLibraryEntries, buildOPDSXMLSkeleton, buildSearchDefinition } from "./helpers/abs";
+import {
+    buildCardEntries,
+    buildCategoryEntries,
+    buildItemEntries,
+    buildLibraryEntries,
+    buildOPDSXMLSkeleton,
+    buildSearchDefinition
+} from "./helpers/abs";
 import { apiCall } from "./helpers/api";
 import { Library, LibraryItem } from "./types/library";
 import { hash } from "crypto";
@@ -26,6 +33,27 @@ interface CacheEntry {
 }
 const libraryItemsCache: Record<string, CacheEntry> = {};
 const CACHE_EXPIRATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
+
+const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) => ({
+    id: item.id,
+    title: item.media.metadata.title,
+    subtitle: item.media.metadata.subtitle,
+    description: item.media.metadata.description,
+    genres: item.media.metadata.genres || [],
+    tags: item.media.metadata.tags || [],
+    publisher: item.media.metadata.publisher,
+    isbn: item.media.metadata.isbn,
+    language: item.media.metadata.language,
+    publishedYear: item.media.metadata.publishedYear,
+    authors: item.media.metadata?.authorName
+        ? item.media.metadata.authorName.split(',').map((author: string) => ({ name: author }))
+        : [],
+    narrators: item.media.metadata?.narratorName
+        ? item.media.metadata.narratorName.split(',').map((narrator: string) => ({ name: narrator }))
+        : [],
+    format: item.media.ebookFormat
+})).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks);
 
 app.get('/opds/:username', async (req: Request, res: Response) => {
     const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
@@ -57,6 +85,17 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
         return;
     }
 
+    if(req.query.categories) {
+        res.type('application/xml').send(
+            buildOPDSXMLSkeleton(
+                `urn:uuid:${req.params.libraryId}`,
+                `Categories`,
+                buildCategoryEntries(req.params.libraryId, user),
+            )
+        );
+        return
+    }
+
     const cacheKey = `${req.params.libraryId}`;
     let items;
 
@@ -72,40 +111,41 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
 
     const library: Library = await apiCall(`/libraries/${req.params.libraryId}`, user);
 
-    let parsedItems: LibraryItem[] = items.results.map((item: any) => ({
-        id: item.id,
-        title: item.media.metadata.title,
-        subtitle: item.media.metadata.subtitle,
-        description: item.media.metadata.description,
-        genres: item.media.metadata.genres || [],
-        tags: item.media.metadata.tags || [],
-        publisher: item.media.metadata.publisher,
-        isbn: item.media.metadata.isbn,
-        language: item.media.metadata.language,
-        publishedYear: item.media.metadata.publishedYear,
-        authors: item.media.metadata?.authorName
-            ? item.media.metadata.authorName.split(',').map((author: string) => ({ name: author }))
-            : [],
-        format: item.media.ebookFormat
-    })).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks);
+    let parsedItems: LibraryItem[] = parseItems(items)
 
     // Filter based on query, author, or title if provided
-    if (req.query.q) {
+    if (req.query.q || req.query.type) {
         const query = req.query.q as string;
         const search = new RegExp(query, 'i');
         parsedItems = parsedItems.filter((item: LibraryItem) => {
-            return (
-                (item.title && item.title.match(search)) ||
-                (item.subtitle && item.subtitle.match(search)) ||
-                (item.description && item.description.match(search)) ||
-                (item.publisher && item.publisher.match(search)) ||
-                (item.isbn && item.isbn.match(search)) ||
-                (item.language && item.language.match(search)) ||
-                (item.publishedYear && item.publishedYear.match(search)) ||
-                (item.authors && item.authors.some((author: any) => author.name.match(search))) ||
-                (item.genres && item.genres.some((genre: any) => genre.match(search))) ||
-                (item.tags && item.tags.some((tag: any) => tag.match(search)))
-            );
+
+            if(req.query.type === 'authors') {
+                return (
+                    item.authors && item.authors.some((author: any) => author.name.match(new RegExp(req.query.name as string, 'i')))
+                );
+            } else if(req.query.type === 'narrators') {
+                return (
+                    item.narrators && item.narrators.some((author: any) => author.name.match(new RegExp(req.query.name as string, 'i')))
+                );
+            } else if(req.query.type === 'genres') {
+                return (
+                    item.genres && item.genres.some((genre: any) => genre.match(new RegExp(req.query.name as string, 'i'))) ||
+                    item.tags && item.tags.some((tag: any) => tag.match(new RegExp(req.query.name as string, 'i')))
+                );
+            }  else {
+                return (
+                    (item.title && item.title.match(search)) ||
+                    (item.subtitle && item.subtitle.match(search)) ||
+                    (item.description && item.description.match(search)) ||
+                    (item.publisher && item.publisher.match(search)) ||
+                    (item.isbn && item.isbn.match(search)) ||
+                    (item.language && item.language.match(search)) ||
+                    (item.publishedYear && item.publishedYear.match(search)) ||
+                    (item.authors && item.authors.some((author: any) => author.name.match(search))) ||
+                    (item.genres && item.genres.some((genre: any) => genre.match(search))) ||
+                    (item.tags && item.tags.some((tag: any) => tag.match(search)))
+                );
+            }
         });
     }
     if (req.query.author) {
@@ -143,6 +183,71 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
             user,
             req,
             endOfPage
+        )
+    );
+});
+
+app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: Response) => {
+    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
+    if (!user) {
+        res.status(401).send('Unauthorized');
+        return;
+    }
+    if(req.params.type !== 'authors' && req.params.type !== 'narrators' && req.params.type !== 'genres') {
+        res.status(400).send('Invalid type');
+        return;
+    }
+
+    const cacheKey = `${req.params.libraryId}`;
+    let items;
+
+    if (
+        libraryItemsCache[cacheKey] &&
+        Date.now() - libraryItemsCache[cacheKey].timestamp < CACHE_EXPIRATION
+    ) {
+        items = libraryItemsCache[cacheKey].data;
+    } else {
+        items = await apiCall(`/libraries/${req.params.libraryId}/items`, user);
+        libraryItemsCache[cacheKey] = { timestamp: Date.now(), data: items };
+    }
+
+    const library: Library = await apiCall(`/libraries/${req.params.libraryId}`, user);
+
+    let parsedItems: LibraryItem[] = parseItems(items)
+
+
+    let distinctType = new Set<string>();
+    parsedItems.forEach((item: LibraryItem) => {
+        if (req.params.type === 'authors') {
+            item.authors.forEach((author: any) => {
+                distinctType.add(author.name.trim());
+            });
+        }
+        if (req.params.type === 'narrators') {
+            item.narrators.forEach((narrator: any) => {
+                distinctType.add(narrator.name.trim());
+            });
+        }
+        if (req.params.type === 'genres') {
+            item.genres.forEach((genre: any) => {
+                distinctType.add(genre.trim());
+            });
+            item.tags.forEach((tag: any) => {
+                distinctType.add(tag.trim());
+            });
+        }
+    });
+
+    let distinctTypeArray = Array.from(distinctType);
+
+    // Sort authors alphabetically
+    distinctTypeArray.sort((a, b) => a.localeCompare(b));
+
+    res.type('application/xml').send(
+        buildOPDSXMLSkeleton(
+            `urn:uuid:${req.params.libraryId}`,
+            `${library.name}`,
+            buildCardEntries(distinctTypeArray, req.params.type, user, req.params.libraryId),
         )
     );
 });

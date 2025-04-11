@@ -8,8 +8,9 @@ OPDS-Server for ABS (Audiobookshelf) is a proof of concept for an OPDS server th
 - [x] Pagination
 - [x] Multiple Users
 - [ ] OPDS Authentication
-- [ ] Books by Author
-- [ ] Books by Narrator
+- [x] Books by Author
+- [x] Books by Narrator
+- [x] Books by Genre/Tags
 
 ## Tested with
 - [x] Thorium
