@@ -105,6 +105,7 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
             .ele('published', (item.publishedYear)	).up()
             .ele('language', item.language).up()
             // @ts-ignore
+            .ele('link', {'href': `${serverURL}/api/items/${item.id}/download?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': 'application/octet-stream'}).up()
             .ele('link', {'href': `${serverURL}/api/items/${item.id}/ebook?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': (item.format in typeMap) ? (typeMap[item.format as string] as string) : 'application/octet-stream'}).up()
             .ele('link', {'href': `${serverURL}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image'}).up()
 

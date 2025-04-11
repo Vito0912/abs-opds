@@ -13,6 +13,7 @@ const app = express();
 const port = process.env.PORT || 3010;
 export const serverURL = process.env.ABS_URL || 'http://localhost:3000';
 const internalUsersString = process.env.OPDS_USERS || '';
+const showAudioBooks = process.env.SHOW_AUDIOBOOKS === 'true' || false;
 
 const internalUsers: InternalUser[] = internalUsersString.split(',').map(user => {
     const [name, apiKey, password] = user.split(':');
@@ -77,8 +78,7 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
             }) || [],
             format: item.media.ebookFormat
         }
-    }).filter((item: LibraryItem) => item.format !== undefined);
-
+    }).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks)
 
     if(req.query.q) {
         const query = req.query.q as string;
