@@ -116,6 +116,16 @@ export function buildCardEntries(items: string[], type: string, user: InternalUs
     });
 }
 
+export function buildCustomCardEntries(items: {item: string, link: string}[], type: string, user: InternalUser, libraryId: string): XMLNode[] {
+    return items.map(item => {
+        return builder.create('entry', { headless: true })
+            .ele('id', item.item.toLowerCase().replace(' ', '-')).up()
+            .ele('title', item.item).up()
+            .ele('updated', new Date().toISOString()).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': item.link}).up()
+    });
+}
+
 export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser): XMLNode[] {
 
     const typeMap = {

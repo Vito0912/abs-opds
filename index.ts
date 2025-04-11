@@ -3,7 +3,7 @@ import { InternalUser } from "./types/internal";
 import dotenv from 'dotenv';
 import {
     buildCardEntries,
-    buildCategoryEntries,
+    buildCategoryEntries, buildCustomCardEntries,
     buildItemEntries,
     buildLibraryEntries,
     buildOPDSXMLSkeleton,
@@ -21,6 +21,7 @@ const port = process.env.PORT || 3010;
 export const serverURL = process.env.ABS_URL || 'http://localhost:3000';
 const internalUsersString = process.env.OPDS_USERS || '';
 const showAudioBooks = process.env.SHOW_AUDIOBOOKS === 'true' || false;
+const showCharCards = process.env.SHOW_CHAR_CARDS === 'true' || false;
 
 const internalUsers: InternalUser[] = internalUsersString.split(',').map(user => {
     const [name, apiKey, password] = user.split(':');
@@ -242,6 +243,42 @@ app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: 
 
     // Sort authors alphabetically
     distinctTypeArray.sort((a, b) => a.localeCompare(b));
+
+    const countByStartLetter: Record<string, number> = {};
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+        countByStartLetter[letter] = 0;
+    });
+    distinctTypeArray.forEach((item: string) => {
+        const startLetter = item.charAt(0).toUpperCase();
+        if (countByStartLetter[startLetter] !== undefined) {
+            countByStartLetter[startLetter]++;
+        }
+    });
+
+    if(!req.query.start && showCharCards) {
+
+        let itemCards: {item: string, link: string}[] = [];
+
+        // Iterate trough countByStartLetter
+        for (const [letter, count] of Object.entries(countByStartLetter)) {
+            itemCards.push({item: `${letter.toUpperCase()} (${count})`, link: `/opds/${user.name}/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`});
+        }
+
+        res.type('application/xml').send(
+            buildOPDSXMLSkeleton(
+                `urn:uuid:${req.params.libraryId}`,
+                `${library.name}`,
+                buildCustomCardEntries(itemCards, req.params.type, user, req.params.libraryId),
+            )
+        );
+        return
+    }
+    if (showCharCards) {
+        distinctTypeArray = distinctTypeArray.filter((item: string) => {
+            const startLetter = item.charAt(0).toLowerCase();
+            return startLetter === req.query.start;
+        })
+    }
 
     res.type('application/xml').send(
         buildOPDSXMLSkeleton(

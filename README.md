@@ -44,4 +44,5 @@ services:
     environment:
       - ABS_URL=http://localhost:8080/
       - OPDS_USERS=user_1:apikey_1,user_2:apikey_2:optional_password_2
+      - SHOW_CHAR_CARDS=true 
 ```
