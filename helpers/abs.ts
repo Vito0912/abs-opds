@@ -123,11 +123,12 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
 export function buildSearchDefinition(id: string, user: InternalUser) {
     return builder.create('OpenSearchDescription', { version: '1.0', encoding: 'UTF-8' })
         .ele('ShortName', 'ABS').up()
+        .att('xmlns:atom', 'http://www.w3.org/2005/Atom')
         .ele('LongName', 'Audiobookshelf').up()
         .ele('Description', 'Search for books in Audiobookshelf').up()
         .ele('Url', {
             'type': 'application/atom+xml',
-            'template': `/opds/${user.name}/libraries/${id}?q={searchTerms}`
+            'template': `/opds/${user.name}/libraries/${id}?q={searchTerms}&amp;author={atom:author}&amp;title={atom:title}`
         }).up()
         .end({ pretty: true });
 }
