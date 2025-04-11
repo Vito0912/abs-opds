@@ -35,7 +35,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          images: ${{ env.REGISTRY }}/abs-opds
+          images: ${{ env.REGISTRY }}/vito0912/abs-opds
           tags: latest
 
       - name: Build and push Docker image
