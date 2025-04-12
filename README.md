@@ -7,12 +7,14 @@ OPDS-Server for ABS (Audiobookshelf) is a proof of concept for an OPDS server th
 - [x] Searching
 - [x] Pagination
 - [x] Multiple Users
-- [ ] OPDS Authentication (Basic Auth) \[third key in config\]
+- [x] OPDS Authentication (Basic Auth) \[third key in config\] OR Abs Auth *1
 - [x] Books by Author
 - [x] Books by Narrator
 - [x] Books by Genre/Tags
 - [x] Books by Series
 - [X] Optional card pagination (A, B, C, ...) instead of author, narrator, etc. names directly. 
+
+*1 If the user is not specified in the ENVs, the system will automatically try to authenticate against ABS. Authentication is treated as a second branch (auth) because some readers do not support authentication or do not send the correct payload as specified in the OPDS specs. The /:username is dropped for the auth branch, and no configuration for the user is required (though it can be provided) since ABS handles authentication. In theory, OAuth is also possible, but I currently do not have any OAuth application running. 
 
 ## Tested with
 - [x] Thorium
