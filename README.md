@@ -7,7 +7,7 @@ OPDS-Server for ABS (Audiobookshelf) is a proof of concept for an OPDS server th
 - [x] Searching
 - [x] Pagination
 - [x] Multiple Users
-- [x] OPDS Authentication (Basic Auth) \[third key in config\] OR Abs Auth *1
+- [x] OPDS Authentication (Basic Auth) \[third key in config\] OR Abs Auth *1 - Branch: (Auth)[https://github.com/Vito0912/abs-opds/tree/auth]
 - [x] Books by Author
 - [x] Books by Narrator
 - [x] Books by Genre/Tags
