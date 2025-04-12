@@ -53,7 +53,7 @@ const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) 
     narrators: item.media.metadata?.narratorName
         ? item.media.metadata.narratorName.split(',').map((narrator: string) => ({ name: narrator }))
         : [],
-    series: item.media.metadata?.seriesName.split(',').map((s: string) => s.replace(/#.*$/, '').trim()) || [],
+    series:  item.media.metadata?.seriesName ? item.media.metadata?.seriesName.split(',').map((s: string) => s.replace(/#.*$/, '').trim()) || [] : [],
     format: item.media.ebookFormat
 })).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks);
 
