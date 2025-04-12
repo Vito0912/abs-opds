@@ -12,18 +12,43 @@ import {
 import { apiCall } from "./helpers/api";
 import { Library, LibraryItem } from "./types/library";
 import { hash } from "crypto";
+import {requireAuth} from "./helpers/auth";
 
 // load .env
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3010;
-export const serverURL = process.env.ABS_URL || 'http://localhost:3000';
 const internalUsersString = process.env.OPDS_USERS || '';
 const showAudioBooks = process.env.SHOW_AUDIOBOOKS === 'true' || false;
 const showCharCards = process.env.SHOW_CHAR_CARDS === 'true' || false;
+export const serverURL = process.env.ABS_URL || 'http://localhost:13378';
+export const AUTH_DOCUMENT = {
+    "id": `/opds/auth`,
+    "title": "Audiobookshelf-OPDS",
+    "description": "Enter your username and password to access the library.",
+    "links": [
+        {"rel": "register", "href": `${serverURL}`, "type": "text/html"},
+        {"rel": "help", "href": "mailto:fito0912@duck.com"},
+    ],
+    "authentication": [
+        {
+            "type": "http://opds-spec.org/auth/basic",
+            "labels": {
+                "login": "Username",
+                "password": "Password"
+            }
+        },
+        // {
+        //     "type": "http://opds-spec.org/auth/oauth/implicit",
+        //     "links": [
+        //         {"rel": "authenticate", "href": `${BASE_URL}/oauth/authorize`, "type": "text/html"}
+        //     ]
+        // }
+    ]
+};
 
-const internalUsers: InternalUser[] = internalUsersString.split(',').map(user => {
+export const internalUsers: InternalUser[] = internalUsersString.split(',').map(user => {
     const [name, apiKey, password] = user.split(':');
     return { name, apiKey, password };
 });
@@ -53,16 +78,12 @@ const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) 
     narrators: item.media.metadata?.narratorName
         ? item.media.metadata.narratorName.split(',').map((narrator: string) => ({ name: narrator }))
         : [],
-    series: item.media.metadata?.seriesName.split(',').map((s: string) => s.replace(/#.*$/, '').trim()) || [],
+    series:  item.media.metadata?.seriesName ? item.media.metadata?.seriesName.split(',').map((s: string) => s.replace(/#.*$/, '').trim()) || [] : [],
     format: item.media.ebookFormat
 })).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks);
 
-app.get('/opds/:username', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds', requireAuth, async (req: Request, res: Response) => {
+    const user = req.user as InternalUser;
 
     const libraries = await apiCall(`/libraries`, user);
     const parsedLibaries: Library[] = libraries.libraries.map((library: any) => ({
@@ -80,12 +101,8 @@ app.get('/opds/:username', async (req: Request, res: Response) => {
     );
 });
 
-app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds/libraries/:libraryId', requireAuth, async (req: Request, res: Response) => {
+    const user = req.user as InternalUser;
 
     if(req.query.categories) {
         res.type('application/xml').send(
@@ -193,12 +210,9 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
     );
 });
 
-app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds/libraries/:libraryId/:type', requireAuth, async (req: Request, res: Response) => {
+    const user = req.user as InternalUser;
+
     if(req.params.type !== 'authors' && req.params.type !== 'narrators' && req.params.type !== 'genres' && req.params.type !== 'series') {
         res.status(400).send('Invalid type');
         return;
@@ -271,7 +285,7 @@ app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: 
 
         // Iterate trough countByStartLetter
         for (const [letter, count] of Object.entries(countByStartLetter)) {
-            itemCards.push({item: `${letter.toUpperCase()} (${count})`, link: `/opds/${user.name}/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`});
+            itemCards.push({item: `${letter.toUpperCase()} (${count})`, link: `/opds/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`});
         }
 
         res.type('application/xml').send(
@@ -310,7 +324,7 @@ app.get('/opds/:username/libraries/:libraryId/search-definition', async (req: Re
 });
 
 app.listen(port, () => {
-    console.log(`OPDS server running at http://localhost:${port}/opds/:username`);
+    console.log(`OPDS server running at http://localhost:${port}/opds`);
     console.log(`OPDS users: ${internalUsers.map(user => user.name).join(', ')}`);
     console.log(`Server URL: ${serverURL}`);
 });
