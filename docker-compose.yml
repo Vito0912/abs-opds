@@ -7,8 +7,10 @@ services:
     ports:
       - "3010:3010"
     environment:
+      - NODE_ENV=production
+      - PORT=3010
       - ABS_URL=https://audiobooks.dev
-      - OPDS_USERS=demo:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhNzQ1ZjAyZi03NmIyLTQ1N2ItOWY2MC0yNzFmZWQzYTNlMjEiLCJ1c2VybmFtZSI6ImRlbW8iLCJpYXQiOjE3MzI0NzIyOTJ9.FGKHLczOJgdHUTIta1y_VlgUbJtZp902utXhUZy-7GE,user_2:apikey_2:optional_password_2
+      - OPDS_USERS=demotest:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhNzQ1ZjAyZi03NmIyLTQ1N2ItOWY2MC0yNzFmZWQzYTNlMjEiLCJ1c2VybmFtZSI6ImRlbW8iLCJpYXQiOjE3MzI0NzIyOTJ9.FGKHLczOJgdHUTIta1y_VlgUbJtZp902utXhUZy-7GE:demo_password
       - OPDS_PAGE_SIZE=20
       - SHOW_AUDIOBOOKS=true
       - SHOW_CHAR_CARDS=true

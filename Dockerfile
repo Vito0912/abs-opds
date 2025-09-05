@@ -14,4 +14,4 @@ COPY --chown=node:node . .
 
 EXPOSE 3010
 
-CMD [ "npx", "tsx", "index.ts" ]
+CMD [ "npm", "start" ]

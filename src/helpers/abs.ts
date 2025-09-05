@@ -1,4 +1,4 @@
-import builder = require('xmlbuilder');
+import * as builder from 'xmlbuilder';
 import {XMLNode} from "xmlbuilder";
 import {Library, LibraryItem} from "../types/library";
 import {serverURL} from "../index";
@@ -41,7 +41,7 @@ export function buildOPDSXMLSkeleton(id: string, title: string, entriesXML: XMLN
             'rel': 'search',
             'type': 'application/opensearchdescription+xml',
             'title': 'Search this library',
-            'href': `/opds/${user.name}/libraries/${library.id}/search-definition`
+            'href': `/opds/libraries/${library.id}/search-definition`
         })
         // Pagination
         const baseUrl = request.originalUrl.replace(/[?&]page=\d+/, '');
@@ -79,12 +79,12 @@ export function buildLibraryEntries(libraries: Library[], user: InternalUser): X
             .ele('id', library.id).up()
             .ele('title', library.name).up()
             .ele('updated', new Date().toISOString()).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${library.id}`}).up(),
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${library.id}`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', library.id).up()
             .ele('title', `${library.name} (Categories)`).up()
             .ele('updated', new Date().toISOString()).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${library.id}?categories=true`}).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${library.id}?categories=true`}).up()
     ]);
 }
 
@@ -93,19 +93,19 @@ export function buildCategoryEntries(libraryId: string, user: InternalUser): XML
         builder.create('entry', { headless: true })
             .ele('id', 'authors').up()
             .ele('title', `Authors`).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/authors`}).up(),
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/authors`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'narrators').up()
             .ele('title', `Narrators`).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/narrators`}).up(),
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/narrators`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'genres').up()
             .ele('title', `Tags/Genres`).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/genres`}).up(),
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/genres`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'series').up()
             .ele('title', `Series`).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}/series`}).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/series`}).up()
     ]
 
 }
@@ -116,7 +116,7 @@ export function buildCardEntries(items: string[], type: string, user: InternalUs
             .ele('id', item.toLowerCase().replace(' ', '-')).up()
             .ele('title', item).up()
             .ele('updated', new Date().toISOString()).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/${user.name}/libraries/${libraryId}?name=${item}&type=${type}`}).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}?name=${item}&type=${type}`}).up()
     });
 }
 
@@ -132,7 +132,7 @@ export function buildCustomCardEntries(items: {item: string, link: string}[], ty
 
 export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser): XMLNode[] {
 
-    const typeMap = {
+    const typeMap: Record<string, string> = {
         'audiobook': 'audio/mpeg',
         'epub': 'application/epub+zip',
         'pdf': 'application/pdf',
@@ -151,9 +151,8 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
             .ele('isbn', item.isbn).up()
             .ele('published', (item.publishedYear)	).up()
             .ele('language', item.language).up()
-            // @ts-ignore
             .ele('link', {'href': `${serverURL}/api/items/${item.id}/download?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': 'application/octet-stream'}).up()
-            .ele('link', {'href': `${serverURL}/api/items/${item.id}/ebook?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': (item.format in typeMap) ? (typeMap[item.format as string] as string) : 'application/octet-stream'}).up()
+            .ele('link', {'href': `${serverURL}/api/items/${item.id}/ebook?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': typeMap[item.format] || 'application/octet-stream'}).up()
             .ele('link', {'href': `${serverURL}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image'}).up()
 
         for (let author of authors) {
@@ -175,7 +174,7 @@ export function buildSearchDefinition(id: string, user: InternalUser) {
         .ele('Description', 'Search for books in Audiobookshelf').up()
         .ele('Url', {
             'type': 'application/atom+xml',
-            'template': `/opds/${user.name}/libraries/${id}?q={searchTerms}&amp;author={atom:author}&amp;title={atom:title}`
+            'template': `/opds/libraries/${id}?q={searchTerms}&amp;author={atom:author}&amp;title={atom:title}`
         }).up()
         .end({ pretty: true });
 }

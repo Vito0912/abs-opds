@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { InternalUser } from "./types/internal";
 import dotenv from 'dotenv';
 import {
@@ -9,7 +9,7 @@ import {
     buildOPDSXMLSkeleton,
     buildSearchDefinition
 } from "./helpers/abs";
-import { apiCall } from "./helpers/api";
+import { apiCall, loginToAudiobookshelf } from "./helpers/api";
 import { Library, LibraryItem } from "./types/library";
 import { hash } from "crypto";
 
@@ -35,6 +35,95 @@ interface CacheEntry {
 const libraryItemsCache: Record<string, CacheEntry> = {};
 const CACHE_EXPIRATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
+async function authenticateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const authHeader = req.headers.authorization;
+    
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`[DEBUG] Auth attempt for ${req.method} ${req.path}`);
+        console.log(`[DEBUG] Auth header present: ${!!authHeader}`);
+    }
+    
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+        if (process.env.NODE_ENV === 'development') {
+            console.log('[DEBUG] No valid Basic Auth header found');
+        }
+        res.set('WWW-Authenticate', 'Basic realm="OPDS"');
+        res.status(401).send('Authentication required');
+        return;
+    }
+
+    try {
+        const base64Credentials = authHeader.split(' ')[1];
+        const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
+        const [username, password] = credentials.split(':');
+
+        if (!username || !password) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('[DEBUG] Invalid credentials format');
+            }
+            res.set('WWW-Authenticate', 'Basic realm="OPDS"');
+            res.status(401).send('Invalid credentials format');
+            return;
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[DEBUG] Attempting authentication for user: ${username}`);
+        }
+
+        // First try internal users (for backwards compatibility)
+        const internalUser = internalUsers.find(u => 
+            u.name.toLowerCase() === username.toLowerCase() && 
+            u.password === password
+        );
+
+        if (internalUser) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`[DEBUG] Internal user authenticated: ${username}`);
+            }
+            req.user = internalUser;
+            next();
+            return;
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[DEBUG] Trying Audiobookshelf authentication for: ${username}`);
+        }
+        
+        const user = await loginToAudiobookshelf(username, password);
+        if (user) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`[DEBUG] Audiobookshelf user authenticated: ${username}`);
+            }
+            req.user = user;
+            next();
+            return;
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[DEBUG] Authentication failed for user: ${username}`);
+        }
+        res.set('WWW-Authenticate', 'Basic realm="OPDS"');
+        res.status(401).send('Invalid username or password');
+        return;
+    } catch (error) {
+        console.error('Authentication error:', error);
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[DEBUG] Authentication exception: ${error}`);
+        }
+        res.set('WWW-Authenticate', 'Basic realm="OPDS"');
+        res.status(401).send('Authentication failed');
+        return;
+    }
+}
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: InternalUser;
+        }
+    }
+}
+
 
 const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) => ({
     id: item.id,
@@ -57,12 +146,8 @@ const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) 
     format: item.media.ebookFormat
 })).filter((item: LibraryItem) => item.format !== undefined || showAudioBooks);
 
-app.get('/opds/:username', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds', authenticateUser, async (req: Request, res: Response) => {
+    const user = req.user!;
 
     const libraries = await apiCall(`/libraries`, user);
     const parsedLibaries: Library[] = libraries.libraries.map((library: any) => ({
@@ -80,12 +165,8 @@ app.get('/opds/:username', async (req: Request, res: Response) => {
     );
 });
 
-app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res: Response) => {
+    const user = req.user!;
 
     if(req.query.categories) {
         res.type('application/xml').send(
@@ -193,12 +274,9 @@ app.get('/opds/:username/libraries/:libraryId', async (req: Request, res: Respon
     );
 });
 
-app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Request, res: Response) => {
+    const user = req.user!;
+    
     if(req.params.type !== 'authors' && req.params.type !== 'narrators' && req.params.type !== 'genres' && req.params.type !== 'series') {
         res.status(400).send('Invalid type');
         return;
@@ -271,7 +349,7 @@ app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: 
 
         // Iterate trough countByStartLetter
         for (const [letter, count] of Object.entries(countByStartLetter)) {
-            itemCards.push({item: `${letter.toUpperCase()} (${count})`, link: `/opds/${user.name}/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`});
+            itemCards.push({item: `${letter.toUpperCase()} (${count})`, link: `/opds/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`});
         }
 
         res.type('application/xml').send(
@@ -299,18 +377,14 @@ app.get('/opds/:username/libraries/:libraryId/:type', async (req: Request, res: 
     );
 });
 
-app.get('/opds/:username/libraries/:libraryId/search-definition', async (req: Request, res: Response) => {
-    const user = internalUsers.find(u => u.name.toLowerCase() === req.params.username.toLowerCase());
-    if (!user) {
-        res.status(401).send('Unauthorized');
-        return;
-    }
+app.get('/opds/libraries/:libraryId/search-definition', authenticateUser, async (req: Request, res: Response) => {
+    const user = req.user!;
 
     res.type('application/xml').send(buildSearchDefinition(req.params.libraryId, user));
 });
 
 app.listen(port, () => {
-    console.log(`OPDS server running at http://localhost:${port}/opds/:username`);
-    console.log(`OPDS users: ${internalUsers.map(user => user.name).join(', ')}`);
+    console.log(`OPDS server running at http://localhost:${port}/opds`);
+    console.log(`OPDS authentication: HTTP Basic Auth`);
     console.log(`Server URL: ${serverURL}`);
 });
