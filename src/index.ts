@@ -332,25 +332,17 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
     // Sort authors alphabetically
     distinctTypeArray.sort((a, b) => a.localeCompare(b));
 
-    const countByStartLetter: Record<string, number> = {};
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
-        countByStartLetter[letter] = 0;
-    });
-    distinctTypeArray.forEach((item: string) => {
+    const countByStartLetter: Record<string, number> = Object.fromEntries('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(letter => [letter, 0]));
+    Object.assign(countByStartLetter, Object.fromEntries(Object.entries(Object.groupBy(distinctTypeArray, (item) => {
         const startLetter = item.charAt(0).toUpperCase();
-        if (countByStartLetter[startLetter] !== undefined) {
-            countByStartLetter[startLetter]++;
-        }
-    });
+        return startLetter.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    })).map(([letter, objects]) => [letter, objects?.length])));
 
     if(!req.query.start && showCharCards) {
-
-        let itemCards: {item: string, link: string}[] = [];
-
         // Iterate trough countByStartLetter
-        for (const [letter, count] of Object.entries(countByStartLetter)) {
-            itemCards.push({item: `${letter.toUpperCase()} (${count})`, link: `/opds/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`});
-        }
+        const itemCards: {item: string, link: string}[] = Object.entries(countByStartLetter).map(([letter, count]) => (
+            {item: `${letter.toUpperCase()} (${count})`, link: `/opds/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`}
+        ));
 
         res.type('application/xml').send(
             buildOPDSXMLSkeleton(
@@ -364,7 +356,8 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
     if (showCharCards) {
         distinctTypeArray = distinctTypeArray.filter((item: string) => {
             const startLetter = item.charAt(0).toLowerCase();
-            return startLetter === req.query.start;
+            const normalizedStartLetter = startLetter.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return normalizedStartLetter === req.query.start;
         })
     }
 
