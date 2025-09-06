@@ -9,7 +9,7 @@ import {
     buildOPDSXMLSkeleton,
     buildSearchDefinition
 } from "./helpers/abs";
-import { apiCall, loginToAudiobookshelf } from "./helpers/api";
+import { apiCall, loginToAudiobookshelf, proxyToAudiobookshelf } from "./helpers/api";
 import { Library, LibraryItem } from "./types/library";
 import { hash } from "crypto";
 
@@ -18,6 +18,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3010;
+export const useProxy = process.env.USE_PROXY === 'true' || false;
 export const serverURL = process.env.ABS_URL || 'http://localhost:3000';
 const internalUsersString = process.env.OPDS_USERS || '';
 const showAudioBooks = process.env.SHOW_AUDIOBOOKS === 'true' || false;
@@ -124,6 +125,7 @@ declare global {
     }
 }
 
+app.get('/opds/proxy/{*any}', (req, res) => proxyToAudiobookshelf(req, res));
 
 const parseItems = (items: any): LibraryItem[] => items.results.map((item: any) => ({
     id: item.id,

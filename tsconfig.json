@@ -15,7 +15,6 @@
     "sourceMap": true,
     "removeComments": false,
     "resolveJsonModule": true,
-    "moduleResolution": "node"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]

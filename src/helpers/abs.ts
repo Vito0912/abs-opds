@@ -1,7 +1,7 @@
 import * as builder from 'xmlbuilder';
 import {XMLNode} from "xmlbuilder";
 import {Library, LibraryItem} from "../types/library";
-import {serverURL} from "../index";
+import {serverURL, useProxy} from "../index";
 import {InternalUser} from "../types/internal";
 import { Request } from 'express';
 
@@ -139,6 +139,8 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
         'mobi': 'application/x-mobipocket-ebook'
     }
 
+    const linkUrl = useProxy ? `/opds/proxy` : `${serverURL}`
+
     return libraryItems.map(item => {
         const authors = item.authors
         let xml = builder.create('entry', { headless: true })
@@ -151,9 +153,9 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
             .ele('isbn', item.isbn).up()
             .ele('published', (item.publishedYear)	).up()
             .ele('language', item.language).up()
-            .ele('link', {'href': `${serverURL}/api/items/${item.id}/download?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': 'application/octet-stream'}).up()
-            .ele('link', {'href': `${serverURL}/api/items/${item.id}/ebook?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': typeMap[item.format] || 'application/octet-stream'}).up()
-            .ele('link', {'href': `${serverURL}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image'}).up()
+            .ele('link', {'href': `${linkUrl}/api/items/${item.id}/download?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': 'application/octet-stream'}).up()
+            .ele('link', {'href': `${linkUrl}/api/items/${item.id}/ebook?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': typeMap[item.format] || 'application/octet-stream'}).up()
+            .ele('link', {'href': `${linkUrl}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image'}).up()
 
         for (let author of authors) {
             xml.ele('author').ele('name', author.name).up().up()
