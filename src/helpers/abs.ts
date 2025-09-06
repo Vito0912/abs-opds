@@ -136,7 +136,7 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
         'audiobook': 'audio/mpeg',
         'epub': 'application/epub+zip',
         'pdf': 'application/pdf',
-        'mobi': 'application/x-mobi7'
+        'mobi': 'application/x-mobipocket-ebook'
     }
 
     return libraryItems.map(item => {
