@@ -80,17 +80,17 @@ export function buildLibraryEntries(libraries: Library[], user: InternalUser): X
             .ele('id', library.id).up()
             .ele('title', library.name).up()
             .ele('updated', new Date().toISOString()).up()
-            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${library.id}`}).up(),
-        builder.create('entry', { headless: true })
-            .ele('id', library.id).up()
-            .ele('title', `${library.name} (Categories)`).up()
-            .ele('updated', new Date().toISOString()).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${library.id}?categories=true`}).up()
     ]);
 }
 
 export function buildCategoryEntries(libraryId: string, user: InternalUser, lang?: string): XMLNode[] {
     return [
+        builder.create('entry', { headless: true })
+            .ele('id', libraryId).up()
+            .ele('title', localize("category.all", lang)).up()
+            .ele('updated', new Date().toISOString()).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'authors').up()
             .ele('title', localize('category.authors', lang)).up()
