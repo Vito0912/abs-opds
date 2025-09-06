@@ -155,6 +155,11 @@ app.get('/opds', authenticateUser, async (req: Request, res: Response) => {
         icon: library.icon
     }));
 
+    //Skip listing libraries and redirect to the first library if only a single library is configured
+    if(parsedLibaries.length === 1) {
+        return res.redirect(`/opds/libraries/${parsedLibaries[0].id}?categories=true`);
+    }
+
     res.type('application/xml').send(
         buildOPDSXMLSkeleton(
             hash('sha1', user.name),
