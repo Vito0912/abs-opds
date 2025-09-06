@@ -337,11 +337,13 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
     // Sort authors alphabetically
     distinctTypeArray.sort((a, b) => a.localeCompare(b));
 
-    const countByStartLetter: Record<string, number> = Object.fromEntries('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(letter => [letter, 0]));
-    Object.assign(countByStartLetter, Object.fromEntries(Object.entries(Object.groupBy(distinctTypeArray, (item) => {
+    //Group by normalized first letter, discard empty entries
+    const countByStartLetter: Record<string, number> = Object.fromEntries(Object.entries(Object.groupBy(distinctTypeArray, (item) => {
         const startLetter = item.charAt(0).toUpperCase();
-        return startLetter.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    })).map(([letter, objects]) => [letter, objects?.length])));
+        const normalizedStartLetter = startLetter.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const isAtoZ = 'A' <= normalizedStartLetter && normalizedStartLetter <= 'Z';
+        return isAtoZ ? normalizedStartLetter : '';
+    })).map(([letter, objects]) => [letter, objects?.length]).filter(([l,c]) => Boolean(l) && Boolean(c)));
 
     if(!req.query.start && showCharCards) {
         // Iterate trough countByStartLetter
