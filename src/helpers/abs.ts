@@ -4,6 +4,7 @@ import {Library, LibraryItem} from "../types/library";
 import {serverURL, useProxy} from "../index";
 import {InternalUser} from "../types/internal";
 import { Request } from 'express';
+import localize from '../i18n/i18n';
 
 export function buildOPDSXMLSkeleton(id: string, title: string, entriesXML: XMLNode[], library?: Library, user?: InternalUser, request?: Request, endOfPage?: boolean): string {
 
@@ -88,23 +89,23 @@ export function buildLibraryEntries(libraries: Library[], user: InternalUser): X
     ]);
 }
 
-export function buildCategoryEntries(libraryId: string, user: InternalUser): XMLNode[] {
+export function buildCategoryEntries(libraryId: string, user: InternalUser, lang?: string): XMLNode[] {
     return [
         builder.create('entry', { headless: true })
             .ele('id', 'authors').up()
-            .ele('title', `Authors`).up()
+            .ele('title', localize('category.authors', lang)).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/authors`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'narrators').up()
-            .ele('title', `Narrators`).up()
+            .ele('title', localize('category.narrators', lang)).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/narrators`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'genres').up()
-            .ele('title', `Tags/Genres`).up()
+            .ele('title', localize('category.genres', lang)).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/genres`}).up(),
         builder.create('entry', { headless: true })
             .ele('id', 'series').up()
-            .ele('title', `Series`).up()
+            .ele('title', localize('category.series', lang)).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/series`}).up()
     ]
 
