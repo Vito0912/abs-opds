@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { InternalUser } from "./types/internal";
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import {
     buildCardEntries,
     buildCategoryEntries, buildCustomCardEntries,
@@ -12,9 +12,6 @@ import {
 import { apiCall, loginToAudiobookshelf, proxyToAudiobookshelf } from "./helpers/api";
 import { Library, LibraryItem } from "./types/library";
 import { hash } from "crypto";
-
-// load .env
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3010;
@@ -169,13 +166,14 @@ app.get('/opds', authenticateUser, async (req: Request, res: Response) => {
 
 app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res: Response) => {
     const user = req.user!;
+    const lang = req.headers['accept-language'];
 
     if(req.query.categories) {
         res.type('application/xml').send(
             buildOPDSXMLSkeleton(
                 `urn:uuid:${req.params.libraryId}`,
                 `Categories`,
-                buildCategoryEntries(req.params.libraryId, user),
+                buildCategoryEntries(req.params.libraryId, user, lang),
             )
         );
         return

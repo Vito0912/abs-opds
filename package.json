@@ -4,7 +4,7 @@
   "description": "PoC for OPDS in ABS",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "axios": "^1.8.4",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "fuzzy-search": "^3.2.1",
     "tsx": "^4.19.3",
     "xmlbuilder": "^15.1.1",
