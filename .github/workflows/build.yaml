@@ -3,6 +3,12 @@ name: Create and publish a Docker image
 on:
   push:
     branches: [main]
+    tags:
+        - 'v*.*.*'
+    paths:
+      - 'src/**'
+      - '.github/workflows/**'
+      - 'Dockerfile'
   workflow_dispatch:
 
 env:
