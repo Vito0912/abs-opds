@@ -37,12 +37,20 @@ export function buildOPDSXMLSkeleton(id: string, title: string, entriesXML: XMLN
             'href': `/library/${library.id}`
         })
 
-// Search
+        // Search
         xml.ele('link', {
             'rel': 'search',
             'type': 'application/opensearchdescription+xml',
             'title': 'Search this library',
             'href': `/opds/libraries/${library.id}/search-definition`
+        })
+
+        // Backfall search? Works with Moonreader
+        xml.ele('link', {
+            'rel': 'search',
+            'type': 'application/atom+xml',
+            'title': 'Search this library',
+            'href': `/opds/libraries/${library.id}?q={searchTerms}`
         })
         
         // OpenSearch elements for pagination information
