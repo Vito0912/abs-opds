@@ -279,9 +279,16 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
             library,
             user,
             req,
-            endOfPage
+            endOfPage,
+            parsedItems.length
         )
     )
+})
+
+app.get('/opds/libraries/:libraryId/search-definition', authenticateUser, async (req: Request, res: Response) => {
+    const user = req.user!
+
+    res.type('application/xml').send(buildSearchDefinition(req.params.libraryId, user))
 })
 
 app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Request, res: Response) => {
@@ -390,12 +397,6 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
             buildCardEntries(distinctTypeArray, req.params.type, user, req.params.libraryId)
         )
     )
-})
-
-app.get('/opds/libraries/:libraryId/search-definition', authenticateUser, async (req: Request, res: Response) => {
-    const user = req.user!
-
-    res.type('application/xml').send(buildSearchDefinition(req.params.libraryId, user))
 })
 
 app.listen(port, () => {
