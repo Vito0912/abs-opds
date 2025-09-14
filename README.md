@@ -24,9 +24,26 @@ OPDS-Server for ABS (Audiobookshelf) is a working OPDS server that can be used w
 
 ## Built-In Demo
 
-Spin up the provided Docker Compose instance and add `http://<local-server-ip>:3010` to your OPDS reader and type in the credentials `demo`for both username and password.
+Spin up the provided Docker Compose instance and add `http://<local-server-ip>:3010` to your OPDS reader and type in the credentials `demotest` for both username and password.
+
+
+## ENVs
+
+The following environment variables can be set in a `.env` file or directly in your Docker Compose setup.
+
+| Variable         | Description                                                                 | Default               | Required |
+|------------------|-----------------------------------------------------------------------------|-----------------------|----------|
+| ABS_URL          | Your Audiobookshelf server URL, e.g. https://audiobooks.dev                |                       | Yes      |
+| SHOW_AUDIOBOOKS  | Show audiobooks in the OPDS feed.                                          | false                 | No       |
+| SHOW_CHAR_CARDS  | Show character cards (A, B, C, ...) before showing names of author, narrator, etc. | false                 | No       |
+| USE_PROXY        | Use a proxy to connect to ABS. If you use the docker network, set this to true to view covers in your reader. Creates potential security risks if someone can read the RAM of the software. | false                 | No       |
+| PORT             | The port the OPDS server will run on.                                      | 3010                  | No       |
+| OPDS_PAGE_SIZE   | Number of items on each page in the OPDS feed.                             | 20                    | No       |
+| OPDS_USERS       | Comma-separated list of users in the format `username:ABS_API_TOKEN:password`. This does NOT need to be your ABS username and password, but values you can freely set to log in with your reader. |                       | No       |
 
 ## Attribution
+
+Thanks to [Martin Joneš](https://github.com/jondycz) for helping with some features and adding this to TrueNas.
 
 > [!IMPORTANT]
 > This project began as a proof of concept (PoC) created several months before the development of [OPDS-ABS](https://github.com/petr-prikryl/OPDS-ABS). They had packed their OPDS server with docker which I found so nice, that I decided to share my old PoC as well with that method.
