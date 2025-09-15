@@ -205,7 +205,8 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
             .ele('language', item.language).up()
             .ele('link', {'href': `${linkUrl}/api/items/${item.id}/download?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': 'application/octet-stream'}).up()
             .ele('link', {'href': `${linkUrl}/api/items/${item.id}/ebook?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/acquisition', 'type': typeMap[item.format] || 'application/octet-stream'}).up()
-            .ele('link', {'href': `${linkUrl}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image'}).up()
+            .ele('link', {'href': `${linkUrl}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image', 'type': 'image/webp'}).up()
+            .ele('link', {'href': `${linkUrl}/api/items/${item.id}/cover?token=${user.apiKey}`, 'rel': 'http://opds-spec.org/image', 'type': 'image/png'}).up()
 
         for (let author of authors) {
             xml.ele('author').ele('name', author.name).up().up()
