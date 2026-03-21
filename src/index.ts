@@ -148,6 +148,7 @@ const parseItems = (items: any): LibraryItem[] =>
             series: item.media.metadata?.seriesName
                 ? item.media.metadata?.seriesName.split(',').map((s: string) => s.replace(/#.*$/, '').trim()) || []
                 : [],
+            addedAt: item.addedAt,
             format: item.media.ebookFormat
         }))
         .filter((item: LibraryItem) => item.format !== undefined || showAudioBooks)
@@ -205,6 +206,15 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
 
     let parsedItems: LibraryItem[] = parseItems(items)
 
+    // Sort based on recently added
+    if (req.query.sort === 'recent') {
+        parsedItems.sort((a, b) => {
+            const dateA = new Date(a.addedAt || 0).getTime();
+            const dateB = new Date(b.addedAt || 0).getTime();
+            return dateB - dateA;
+        });
+    }
+    
     // Filter based on query, author, or title if provided
     if (req.query.q || req.query.type) {
         const query = req.query.q as string
