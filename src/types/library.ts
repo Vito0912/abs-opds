@@ -19,7 +19,7 @@ export type LibraryItem = {
     tags: string[]
     format: string
     series: string[]
-    addedAt: string[]
+    addedAt: string
 }
 
 export type Author = {
