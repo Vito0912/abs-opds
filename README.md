@@ -9,6 +9,7 @@ OPDS-Server for ABS (Audiobookshelf) is a working OPDS server that can be used w
 - [x] Pagination
 - [x] Multiple Users
 - [x] ABS authentication or legacy API authentication
+- [x] Books by Recently Added
 - [x] Books by Author
 - [x] Books by Narrator
 - [x] Books by Genre/Tags
@@ -21,6 +22,9 @@ OPDS-Server for ABS (Audiobookshelf) is a working OPDS server that can be used w
 
 - [x] Thorium
 - [x] Moon+ Reader
+- [x] KOReader*
+
+\*For KOReader: must input URL as `http://<user>:<password>@example.com/opds` and leave authentication forms blank
 
 ## Built-In Demo
 
