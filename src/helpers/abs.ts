@@ -141,6 +141,11 @@ export function buildCategoryEntries(libraryId: string, user: InternalUser, lang
             .ele('updated', new Date().toISOString()).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}`}).up(),
         builder.create('entry', { headless: true })
+            .ele('id', 'recent').up()
+            .ele('title', localize('category.recent', lang)).up()
+            .ele('updated', new Date().toISOString()).up()
+            .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}?sort=recent`}).up(),
+        builder.create('entry', { headless: true })
             .ele('id', 'authors').up()
             .ele('title', localize('category.authors', lang)).up()
             .ele('link', {'type': 'application/atom+xml;profile=opds-catalog', 'rel': 'subsection', 'href': `/opds/libraries/${libraryId}/authors`}).up(),
