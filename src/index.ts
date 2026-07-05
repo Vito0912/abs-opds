@@ -37,7 +37,7 @@ interface CacheEntry {
     data: any
 }
 const libraryItemsCache: Record<string, CacheEntry> = {}
-const CACHE_EXPIRATION = 60 * 60 * 1000 // 1 hour in milliseconds
+const CACHE_EXPIRATION = process.env.CACHE_EXPIRATION ? parseInt(process.env.CACHE_EXPIRATION)*1000 : 60 * 60 * 1000 // 1 hour in milliseconds
 
 function parseOPDSCategories(value?: string): OpdsCategory[] {
     if (!value?.trim()) {

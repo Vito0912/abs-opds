@@ -44,7 +44,7 @@ The following environment variables can be set in a `.env` file or directly in y
 | PORT            | The port the OPDS server will run on.                                                                                                                                                             | 3010           | No       |
 | OPDS_PAGE_SIZE  | Number of items on each page in the OPDS feed.                                                                                                                                                    | 20             | No       |
 | OPDS_USERS      | Comma-separated list of users in the format `username:ABS_API_TOKEN:password`. This does NOT need to be your ABS username and password, but values you can freely set to log in with your reader. |                | No       |
-
+| CACHE_EXPIRATION  | Amount of time to cache requests, in seconds                                                                                                                                                   | 3600             | No       |
 ## Attribution
 
 Thanks to [Martin Joneš](https://github.com/jondycz) for helping with some features and adding this to TrueNas.
