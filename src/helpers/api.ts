@@ -211,6 +211,11 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
         res.status(405).send('Method Not Allowed')
         return
     }
+    
+    if (!useProxy) {
+        res.status(403).send('Forbidden')
+        return
+    }
 
     const token = getQueryStringValue(req.query.token)
     if (!token) {

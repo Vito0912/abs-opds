@@ -305,7 +305,7 @@ function buildEbookDownloadUrl(item: LibraryItem, user: InternalUser): string {
 
     const filename = encodeURIComponent(buildDownloadFilename(item.title, item.format))
 
-    return `/opds/download/${encodeURIComponent(item.id)}/${filename}?${query.toString()}`
+    return `/opds/proxy/download/${encodeURIComponent(item.id)}/${filename}?${query.toString()}`
 }
 
 export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser): XMLNode[] {

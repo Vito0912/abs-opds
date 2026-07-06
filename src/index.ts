@@ -180,8 +180,8 @@ declare global {
     }
 }
 
+app.get('/opds/proxy/download/:itemId/:filename', (req, res) => downloadItemFromAudiobookshelf(req, res))
 app.get('/opds/proxy/{*any}', (req, res) => proxyToAudiobookshelf(req, res))
-app.get('/opds/download/:itemId/:filename', (req, res) => downloadItemFromAudiobookshelf(req, res))
 
 const parseItems = (items: any): LibraryItem[] =>
     items.results
