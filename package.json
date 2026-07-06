@@ -15,6 +15,7 @@
         "@types/express": "^5.0.6",
         "@types/fuzzy-search": "^2.1.5",
         "@types/node": "^22.19.21",
+        "prettier": "3.9.4",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
     },

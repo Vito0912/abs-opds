@@ -3,6 +3,13 @@ import type { Request, Response } from 'express'
 import axios from 'axios'
 import { serverURL, useProxy } from '../index.js'
 import crypto from 'crypto'
+import {
+    buildContentDisposition,
+    getDownloadExtension,
+    getDownloadMimeType,
+    normalizeFormat,
+    sanitizeFilenameBase
+} from './download.js'
 
 interface CachedToken {
     hashedToken: string
@@ -162,6 +169,102 @@ export async function proxyToAudiobookshelf(req: Request, res: Response) {
     } catch (err) {
         if (process.env.NODE_ENV === 'development') {
             console.error('[DEBUG] ABS proxy error:', err)
+        }
+        if (!res.headersSent) {
+            res.status(502).send('Bad Gateway')
+        } else {
+            res.end()
+        }
+    }
+}
+
+function getQueryStringValue(value: unknown): string | undefined {
+    if (typeof value === 'string') {
+        return value
+    }
+
+    if (Array.isArray(value) && typeof value[0] === 'string') {
+        return value[0]
+    }
+
+    return undefined
+}
+
+function setProxyHeaders(responseHeaders: Record<string, any>, res: Response): void {
+    const excludedHeaders = new Set([
+        'connection',
+        'content-disposition',
+        'content-type',
+        'keep-alive',
+        'transfer-encoding'
+    ])
+
+    for (const [key, value] of Object.entries(responseHeaders)) {
+        if (value !== undefined && !excludedHeaders.has(key.toLowerCase())) {
+            res.setHeader(key, value as any)
+        }
+    }
+}
+
+export async function downloadItemFromAudiobookshelf(req: Request, res: Response) {
+    if (req.method !== 'GET') {
+        res.status(405).send('Method Not Allowed')
+        return
+    }
+    
+    if (!useProxy) {
+        res.status(403).send('Forbidden')
+        return
+    }
+
+    const token = getQueryStringValue(req.query.token)
+    if (!token) {
+        res.status(401).send('Authentication required')
+        return
+    }
+
+    const itemId = getQueryStringValue(req.params.itemId)
+    const filenameParam = getQueryStringValue(req.params.filename)
+    if (!itemId || !filenameParam) {
+        res.status(400).send('Invalid download request')
+        return
+    }
+
+    const requestedFilename = sanitizeFilenameBase(filenameParam)
+    const format = normalizeFormat(getQueryStringValue(req.query.format))
+    const extension = getDownloadExtension(format)
+    const filename = requestedFilename.toLowerCase().endsWith(`.${extension}`)
+        ? requestedFilename
+        : `${requestedFilename}.${extension}`
+    const target = new URL(`/api/items/${encodeURIComponent(itemId)}/ebook`, serverURL).toString()
+
+    try {
+        const response = await axios.get(target, {
+            responseType: 'stream',
+            headers: {
+                Authorization: `Bearer ${token}`
+            },
+            maxRedirects: 0,
+            timeout: 15000,
+            validateStatus: () => true
+        })
+
+        res.status(response.status)
+        setProxyHeaders(response.headers, res)
+
+        if (response.status >= 200 && response.status < 300) {
+            res.setHeader('Content-Type', getDownloadMimeType(format))
+            res.setHeader('Content-Disposition', buildContentDisposition(filename))
+        }
+
+        response.data.pipe(res)
+        response.data.on('error', () => {
+            if (!res.headersSent) res.status(502)
+            res.end()
+        })
+    } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+            console.error('[DEBUG] ABS download proxy error:', err)
         }
         if (!res.headersSent) {
             res.status(502).send('Bad Gateway')

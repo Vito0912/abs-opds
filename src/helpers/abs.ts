@@ -5,6 +5,7 @@ import { serverURL, useProxy } from '../index.js'
 import { InternalUser } from '../types/internal.js'
 import { Request } from 'express'
 import localize from '../i18n/i18n.js'
+import { buildDownloadFilename, getDownloadMimeType } from './download.js'
 
 export const OPDS_CATEGORY_TYPES = ['all', 'recent', 'authors', 'narrators', 'genres', 'series'] as const
 export type OpdsCategory = (typeof OPDS_CATEGORY_TYPES)[number]
@@ -292,18 +293,30 @@ export function buildCustomCardEntries(items: { item: string; link: string }[]):
     })
 }
 
-export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser): XMLNode[] {
-    const typeMap: Record<string, string> = {
-        audiobook: 'audio/mpeg',
-        epub: 'application/epub+zip',
-        pdf: 'application/pdf',
-        mobi: 'application/x-mobipocket-ebook'
+function buildEbookDownloadUrl(item: LibraryItem, user: InternalUser): string {
+    if (!useProxy) {
+        return `${serverURL}/api/items/${item.id}/ebook?token=${user.apiKey}`
     }
 
+    const query = new URLSearchParams({
+        format: item.format,
+        token: user.apiKey
+    })
+
+    const filename = encodeURIComponent(buildDownloadFilename(item.title, item.format))
+
+    return `/opds/proxy/download/${encodeURIComponent(item.id)}/${filename}?${query.toString()}`
+}
+
+export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser): XMLNode[] {
     const linkUrl = useProxy ? `/opds/proxy` : `${serverURL}`
 
     return libraryItems.map((item) => {
         const authors = item.authors
+        const downloadUrl = item.format
+            ? buildEbookDownloadUrl(item, user)
+            : `${linkUrl}/api/items/${item.id}/download?token=${user.apiKey}`
+
         let xml = builder
             .create('entry', { headless: true })
             .ele('id', `urn:uuid:${item.id}`)
@@ -325,15 +338,9 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
             .ele('language', item.language)
             .up()
             .ele('link', {
-                href: `${linkUrl}/api/items/${item.id}/download?token=${user.apiKey}`,
+                href: downloadUrl,
                 rel: 'http://opds-spec.org/acquisition',
-                type: 'application/octet-stream'
-            })
-            .up()
-            .ele('link', {
-                href: `${linkUrl}/api/items/${item.id}/ebook?token=${user.apiKey}`,
-                rel: 'http://opds-spec.org/acquisition',
-                type: typeMap[item.format] || 'application/octet-stream'
+                type: item.format ? getDownloadMimeType(item.format) : 'application/octet-stream'
             })
             .up()
             .ele('link', {
