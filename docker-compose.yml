@@ -1,5 +1,6 @@
 services:
     opds:
+        image: ghcr.io/vito0912/abs-opds:latest
         build:
             context: .
         container_name: abs-opds
