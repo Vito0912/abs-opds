@@ -207,7 +207,7 @@ function setProxyHeaders(responseHeaders: Record<string, any>, res: Response): v
 }
 
 export async function downloadItemFromAudiobookshelf(req: Request, res: Response) {
-    if (req.method !== 'GET') {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.status(405).send('Method Not Allowed')
         return
     }
@@ -239,7 +239,9 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
     const target = new URL(`/api/items/${encodeURIComponent(itemId)}/ebook`, serverURL).toString()
 
     try {
-        const response = await axios.get(target, {
+        const response = await axios.request({
+            method: req.method,
+            url: target,
             responseType: 'stream',
             headers: {
                 Authorization: `Bearer ${token}`
@@ -255,6 +257,11 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
         if (response.status >= 200 && response.status < 300) {
             res.setHeader('Content-Type', getDownloadMimeType(format))
             res.setHeader('Content-Disposition', buildContentDisposition(filename))
+        }
+
+        if (req.method === 'HEAD') {
+            res.end()
+            return
         }
 
         response.data.pipe(res)
