@@ -217,8 +217,11 @@ declare global {
 app.get('/opds/proxy/download/:itemId/:filename', (req, res) => downloadItemFromAudiobookshelf(req, res))
 app.get('/opds/proxy/{*any}', (req, res) => proxyToAudiobookshelf(req, res))
 
-const parseItems = (items: any): LibraryItem[] =>
-    items.results
+const parseItems = (items: any): LibraryItem[] => {
+    const results: any[] = Array.isArray(items?.results) ? items.results : []
+
+    return results
+        .filter((item: any) => item?.media?.metadata)
         .map((item: any) => ({
             id: item.id,
             title: item.media.metadata.title,
@@ -243,6 +246,7 @@ const parseItems = (items: any): LibraryItem[] =>
             format: item.media.ebookFormat
         }))
         .filter((item: LibraryItem) => item.format !== undefined || showAudioBooks)
+}
 
 function getLibraryItemsCacheKey(libraryId: string, user: InternalUser): string {
     return `${hash('sha1', `${user.name}:${user.apiKey}`)}:${libraryId}`
@@ -407,9 +411,9 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
     }
 
     // Pagination
-    const page = parseInt(req.query.page as string) || 0
+    const page = Math.max(0, parseInt(req.query.page as string) || 0)
     const pageSize = process.env.OPDS_PAGE_SIZE ? parseInt(process.env.OPDS_PAGE_SIZE) : 20
-    const startIndex = page * pageSize
+    const startIndex = Math.min(page * pageSize, parsedItems.length)
     const endIndex = Math.min(startIndex + pageSize, parsedItems.length)
     const paginatedItems = parsedItems.slice(startIndex, endIndex)
     const endOfPage = endIndex >= parsedItems.length

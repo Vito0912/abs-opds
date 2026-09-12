@@ -171,7 +171,7 @@ export async function proxyToAudiobookshelf(req: Request, res: Response) {
         return
     }
 
-    if (req.method !== 'GET') {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.status(405).send('Method Not Allowed')
         return
     }
@@ -183,7 +183,9 @@ export async function proxyToAudiobookshelf(req: Request, res: Response) {
     }
 
     try {
-        const response = await axios.get(target.toString(), {
+        const response = await axios.request({
+            method: req.method,
+            url: target.toString(),
             responseType: 'stream',
             headers: {
                 'x-forwarded-proto': req.protocol,
@@ -191,21 +193,22 @@ export async function proxyToAudiobookshelf(req: Request, res: Response) {
             },
             maxRedirects: 0,
             timeout: 15000,
+            // Relay the body verbatim so the forwarded content-encoding and
+            // content-length keep describing the bytes we actually send.
+            decompress: false,
             validateStatus: () => true
         })
 
         res.status(response.status)
-        for (const [key, value] of Object.entries(response.headers)) {
-            if (value !== undefined) {
-                res.setHeader(key, value as any)
-            }
+        copyResponseHeaders(response.headers, res)
+
+        if (req.method === 'HEAD') {
+            response.data.destroy?.()
+            res.end()
+            return
         }
 
-        response.data.pipe(res)
-        response.data.on('error', () => {
-            if (!res.headersSent) res.status(502)
-            res.end()
-        })
+        pipeUpstream(response.data, res)
     } catch (err) {
         if (process.env.NODE_ENV === 'development') {
             console.error('[DEBUG] ABS proxy error:', err)
@@ -230,20 +233,43 @@ function getQueryStringValue(value: unknown): string | undefined {
     return undefined
 }
 
-function setProxyHeaders(responseHeaders: Record<string, any>, res: Response): void {
-    const excludedHeaders = new Set([
-        'connection',
-        'content-disposition',
-        'content-type',
-        'keep-alive',
-        'transfer-encoding'
-    ])
+/** Headers that are strictly connection-scoped and must not be relayed onward. */
+const HOP_BY_HOP_HEADERS = new Set([
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade'
+])
+
+function copyResponseHeaders(
+    responseHeaders: Record<string, any>,
+    res: Response,
+    additionalExcluded: readonly string[] = []
+): void {
+    const excluded = new Set(HOP_BY_HOP_HEADERS)
+    for (const header of additionalExcluded) {
+        excluded.add(header.toLowerCase())
+    }
 
     for (const [key, value] of Object.entries(responseHeaders)) {
-        if (value !== undefined && !excludedHeaders.has(key.toLowerCase())) {
+        if (value !== undefined && !excluded.has(key.toLowerCase())) {
             res.setHeader(key, value as any)
         }
     }
+}
+
+function pipeUpstream(stream: NodeJS.ReadableStream, res: Response): void {
+    stream.pipe(res)
+    stream.on('error', () => {
+        if (!res.headersSent) {
+            res.status(502)
+        }
+        res.end()
+    })
 }
 
 export async function downloadItemFromAudiobookshelf(req: Request, res: Response) {
@@ -292,11 +318,12 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
             },
             maxRedirects: 0,
             timeout: 15000,
+            decompress: false,
             validateStatus: () => true
         })
 
         res.status(response.status)
-        setProxyHeaders(response.headers, res)
+        copyResponseHeaders(response.headers, res, ['content-disposition', 'content-type'])
 
         if (response.status >= 200 && response.status < 300) {
             res.setHeader('Content-Type', getDownloadMimeType(format))
@@ -304,15 +331,12 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
         }
 
         if (req.method === 'HEAD') {
+            response.data.destroy?.()
             res.end()
             return
         }
 
-        response.data.pipe(res)
-        response.data.on('error', () => {
-            if (!res.headersSent) res.status(502)
-            res.end()
-        })
+        pipeUpstream(response.data, res)
     } catch (err) {
         if (process.env.NODE_ENV === 'development') {
             console.error('[DEBUG] ABS download proxy error:', err)
