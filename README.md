@@ -28,7 +28,7 @@ OPDS-Server for ABS (Audiobookshelf) is a working OPDS server that can be used w
 
 ## Built-In Demo
 
-Spin up the provided Docker Compose instance and add `http://<local-server-ip>:3010/opds` to your OPDS reader and type in the credentials `test` for both username and password.
+Spin up the provided Docker Compose instance and add `http://<local-server-ip>:3010/opds` to your OPDS reader and type in the credentials `demo` for both username and password.
 
 ## ENVs
 
@@ -40,11 +40,11 @@ The following environment variables can be set in a `.env` file or directly in y
 | SHOW_AUDIOBOOKS | Show audiobooks in the OPDS feed. When disabled, top-level libraries/categories with no ebook items are hidden.                                                                                   | false          | No       |
 | SHOW_CHAR_CARDS | Show character cards (A, B, C, ...) before showing names of author, narrator, etc.                                                                                                                | false          | No       |
 | OPDS_CATEGORIES | Comma-separated categories to show in the listed order: `all`, `recent`, `authors`, `narrators`, `genres`, `series`. If unset, all categories are shown in the default order.                     | all categories | No       |
-| USE_PROXY       | Use a proxy to connect to ABS. If you use the docker network, set this to true to view covers in your reader. Creates potential security risks if someone can read the RAM of the software.       | false          | No       |
+| CACHE_EXPIRATION | Library item cache lifetime in seconds. `0` disables library item caching. Invalid, negative, or empty values fall back to 3600 seconds.                                                                        | 3600         | No       |
+| USE_PROXY       | Use a proxy to connect to ABS. If you use the docker network, set this to true to view covers in your reader. Creates potential security risks if someone can read the RAM of the software. Do not use in production nor if you have multiple users.       | false          | No       |
 | PORT            | The port the OPDS server will run on.                                                                                                                                                             | 3010           | No       |
 | OPDS_PAGE_SIZE  | Number of items on each page in the OPDS feed.                                                                                                                                                    | 20             | No       |
 | OPDS_USERS      | Comma-separated list of users in the format `username:ABS_API_TOKEN:password`. This does NOT need to be your ABS username and password, but values you can freely set to log in with your reader. |                | No       |
-| CACHE_EXPIRATION  | Amount of time to cache requests, in seconds                                                                                                                                                   | 3600             | No       |
 ## Attribution
 
 Thanks to [Martin Joneš](https://github.com/jondycz) for helping with some features and adding this to TrueNas.

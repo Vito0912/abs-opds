@@ -8,22 +8,20 @@
     "main": "dist/index.js",
     "scripts": {
         "build": "tsc && cp -r src/i18n/languages dist/i18n/languages",
+        "test": "node --import tsx --test",
         "start": "tsx src/index.ts",
         "dev": "tsx --watch src/index.ts"
     },
     "devDependencies": {
         "@types/express": "^5.0.6",
-        "@types/fuzzy-search": "^2.1.5",
         "@types/node": "^22.19.21",
         "prettier": "3.9.4",
-        "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
     },
     "dependencies": {
         "axios": "^1.17.0",
         "dotenv": "^17.4.2",
         "express": "^5.2.1",
-        "fuzzy-search": "^3.2.1",
         "tsx": "^4.22.4",
         "xmlbuilder": "^15.1.1"
     }

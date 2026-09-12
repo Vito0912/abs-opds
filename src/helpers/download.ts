@@ -35,7 +35,7 @@ export function getDownloadMimeType(format?: string): string {
 
 export function getDownloadExtension(format?: string): string {
     const normalizedFormat = normalizeFormat(format)
-    return normalizedFormat ? FILENAME_EXTENSION_BY_FORMAT[normalizedFormat] || normalizedFormat : 'bin'
+    return normalizedFormat ? FILENAME_EXTENSION_BY_FORMAT[normalizedFormat] || 'bin' : 'bin'
 }
 
 export function sanitizeFilenameBase(value?: string): string {

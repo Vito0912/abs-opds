@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { InternalUser } from './types/internal.js'
-import 'dotenv/config'
 import {
     buildCardEntries,
     buildCategoryEntries,
@@ -8,23 +7,41 @@ import {
     buildItemEntries,
     buildLibraryEntries,
     buildOPDSXMLSkeleton,
-    buildSearchDefinition,
-    OPDS_CATEGORY_TYPES,
-    type OpdsCategory
+    buildSearchDefinition
 } from './helpers/abs.js'
-import { apiCall, downloadItemFromAudiobookshelf, loginToAudiobookshelf, proxyToAudiobookshelf } from './helpers/api.js'
+import {
+    apiCall,
+    downloadItemFromAudiobookshelf,
+    loginToAudiobookshelf,
+    proxyCoverToAudiobookshelf,
+    proxyToAudiobookshelf
+} from './helpers/api.js'
 import { Library, LibraryItem } from './types/library.js'
+import type { ABSItem, ABSItemsResponse, ABSLibrariesResponse } from './types/abs.js'
 import { hash } from 'crypto'
 import { loadLocalizations } from './i18n/i18n.js'
+import { OPDS_CATEGORY_TYPES } from './types/opds.js'
+import type { CustomCard, OpdsCategory } from './types/opds.js'
+import {
+    cacheExpirationSeconds,
+    isDevelopment,
+    isTest,
+    opdsCategories,
+    opdsPageSize,
+    opdsUsers,
+    port,
+    serverURL,
+    showAudioBooks,
+    showCharCards
+} from './config.js'
+import { getLibraryItemsCacheKey } from './helpers/cache-keys.js'
+import { getCachedValue, pruneExpired, pruneTokenCache } from './helpers/cache.js'
+import type { CacheEntry } from './types/cache.js'
+import { filterLibraryItems, MAX_SEARCH_LENGTH } from './helpers/search.js'
 
-const app = express()
-const port = process.env.PORT || 3010
-export const useProxy = process.env.USE_PROXY === 'true' || false
-export const serverURL = process.env.ABS_URL || 'http://localhost:3000'
-const internalUsersString = process.env.OPDS_USERS || ''
-const showAudioBooks = process.env.SHOW_AUDIOBOOKS === 'true' || false
-const showCharCards = process.env.SHOW_CHAR_CARDS === 'true' || false
-const enabledOPDSCategories = parseOPDSCategories(process.env.OPDS_CATEGORIES)
+const app: express.Express = express()
+const internalUsersString = opdsUsers
+const enabledOPDSCategories = parseOPDSCategories(opdsCategories)
 await loadLocalizations()
 
 const internalUsers: InternalUser[] = internalUsersString.split(',').map((user) => {
@@ -32,12 +49,8 @@ const internalUsers: InternalUser[] = internalUsersString.split(',').map((user) 
     return { name, apiKey, password }
 })
 
-interface CacheEntry {
-    timestamp: number
-    data: any
-}
-const libraryItemsCache: Record<string, CacheEntry> = {}
-const CACHE_EXPIRATION = process.env.CACHE_EXPIRATION ? parseInt(process.env.CACHE_EXPIRATION)*1000 : 60 * 60 * 1000 // 1 hour in milliseconds
+const libraryItemsCache = new Map<string, CacheEntry<ABSItemsResponse>>()
+const LIBRARY_CACHE_TTL = cacheExpirationSeconds * 1000
 
 function parseOPDSCategories(value?: string): OpdsCategory[] {
     if (!value?.trim()) {
@@ -95,13 +108,13 @@ function getLibraryItemsCategory(req: Request): OpdsCategory | null {
 async function authenticateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const authHeader = req.headers.authorization
 
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevelopment) {
         console.log(`[DEBUG] Auth attempt for ${req.method} ${req.path}`)
         console.log(`[DEBUG] Auth header present: ${!!authHeader}`)
     }
 
     if (!authHeader || !authHeader.startsWith('Basic ')) {
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log('[DEBUG] No valid Basic Auth header found')
         }
         res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -115,7 +128,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         const [username, password] = credentials.split(':')
 
         if (!username || !password) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log('[DEBUG] Invalid credentials format')
             }
             res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -123,7 +136,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
             return
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Attempting authentication for user: ${username}`)
         }
 
@@ -133,7 +146,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         )
 
         if (internalUser) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log(`[DEBUG] Internal user authenticated: ${username}`)
             }
             req.user = internalUser
@@ -141,13 +154,13 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
             return
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Trying Audiobookshelf authentication for: ${username}`)
         }
 
         const user = await loginToAudiobookshelf(username, password)
         if (user) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log(`[DEBUG] Audiobookshelf user authenticated: ${username}`)
             }
             req.user = user
@@ -155,7 +168,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
             return
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Authentication failed for user: ${username}`)
         }
         res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -163,7 +176,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         return
     } catch (error) {
         console.error('Authentication error:', error)
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Authentication exception: ${error}`)
         }
         res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -172,26 +185,25 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
     }
 }
 
-declare global {
-    namespace Express {
-        interface Request {
-            user?: InternalUser
-        }
-    }
-}
+app.get('/opds/proxy/api/items/:itemId/cover', (req, res) => proxyCoverToAudiobookshelf(req, res))
+app.get('/opds/proxy/download/:itemId/:filename', authenticateUser, (req, res) => downloadItemFromAudiobookshelf(req, res))
+app.get('/opds/proxy/{*any}', authenticateUser, (req, res) => proxyToAudiobookshelf(req, res))
 
-app.get('/opds/proxy/download/:itemId/:filename', (req, res) => downloadItemFromAudiobookshelf(req, res))
-app.get('/opds/proxy/{*any}', (req, res) => proxyToAudiobookshelf(req, res))
+const cachePruningInterval = setInterval(() => {
+    pruneExpired(libraryItemsCache)
+    pruneTokenCache()
+}, 60 * 1000)
+cachePruningInterval.unref()
 
-const parseItems = (items: any): LibraryItem[] =>
+const parseItems = (items: ABSItemsResponse): LibraryItem[] =>
     items.results
-        .map((item: any) => ({
+        .map((item: ABSItem) => ({
             id: item.id,
             title: item.media.metadata.title,
             subtitle: item.media.metadata.subtitle,
             description: item.media.metadata.description,
-            genres: item.media.metadata.genres || [],
-            tags: item.media.metadata.tags || [],
+            genres: item.media.metadata.genres ?? [],
+            tags: item.media.metadata.tags ?? [],
             publisher: item.media.metadata.publisher,
             isbn: item.media.metadata.isbn,
             language: item.media.metadata.language,
@@ -210,22 +222,23 @@ const parseItems = (items: any): LibraryItem[] =>
         }))
         .filter((item: LibraryItem) => item.format !== undefined || showAudioBooks)
 
-function getLibraryItemsCacheKey(libraryId: string, user: InternalUser): string {
-    return `${hash('sha1', `${user.name}:${user.apiKey}`)}:${libraryId}`
-}
-
-async function getLibraryItems(libraryId: string | string[], user: InternalUser) {
+async function getLibraryItems(libraryId: string, user: InternalUser): Promise<ABSItemsResponse>
+async function getLibraryItems(libraryId: string[], user: InternalUser): Promise<null>
+async function getLibraryItems(libraryId: string | string[], user: InternalUser): Promise<ABSItemsResponse | null> {
     if (Array.isArray(libraryId)) {
         return null
     }
     const cacheKey = getLibraryItemsCacheKey(libraryId, user)
 
-    if (libraryItemsCache[cacheKey] && Date.now() - libraryItemsCache[cacheKey].timestamp < CACHE_EXPIRATION) {
-        return libraryItemsCache[cacheKey].data
+    const cachedItems = getCachedValue(libraryItemsCache, cacheKey)
+    if (cachedItems !== undefined) {
+        return cachedItems
     }
 
-    const items = await apiCall(`/libraries/${libraryId}/items`, user)
-    libraryItemsCache[cacheKey] = { timestamp: Date.now(), data: items }
+    const items = await apiCall<ABSItemsResponse>(`/libraries/${libraryId}/items`, user)
+    if (LIBRARY_CACHE_TTL > 0) {
+        libraryItemsCache.set(cacheKey, { value: items, expiresAt: Date.now() + LIBRARY_CACHE_TTL })
+    }
     return items
 }
 
@@ -263,8 +276,8 @@ const sortItemsByTitle = (items: LibraryItem[]): void => {
 app.get('/opds', authenticateUser, async (req: Request, res: Response) => {
     const user = req.user!
 
-    const libraries = await apiCall(`/libraries`, user)
-    const parsedLibaries: Library[] = libraries.libraries.map((library: any) => ({
+    const libraries = await apiCall<ABSLibrariesResponse>(`/libraries`, user)
+    const parsedLibaries: Library[] = libraries.libraries.map((library) => ({
         id: library.id,
         name: library.name,
         icon: library.icon
@@ -329,9 +342,9 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
         return
     }
 
-    const items = await getLibraryItems(req.params.libraryId, user)
+    const items = await getLibraryItems(req.params.libraryId as string, user)
 
-    const library: Library = await apiCall(`/libraries/${req.params.libraryId}`, user)
+    const library: Library = await apiCall<Library>(`/libraries/${req.params.libraryId}`, user)
 
     let parsedItems: LibraryItem[] = parseItems(items)
 
@@ -344,63 +357,21 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
         })
     }
 
-    // Filter based on query, author, or title if provided
-    if (req.query.q || req.query.type) {
-        const query = req.query.q as string
-        const search = new RegExp(query, 'i')
-        parsedItems = parsedItems.filter((item: LibraryItem) => {
-            if (req.query.type === 'authors') {
-                return (
-                    item.authors &&
-                    item.authors.some((author: any) => author.name.match(new RegExp(req.query.name as string, 'i')))
-                )
-            } else if (req.query.type === 'narrators') {
-                return (
-                    item.narrators &&
-                    item.narrators.some((author: any) => author.name.match(new RegExp(req.query.name as string, 'i')))
-                )
-            } else if (req.query.type === 'genres') {
-                return (
-                    (item.genres &&
-                        item.genres.some((genre: any) => genre.match(new RegExp(req.query.name as string, 'i')))) ||
-                    (item.tags && item.tags.some((tag: any) => tag.match(new RegExp(req.query.name as string, 'i'))))
-                )
-            } else if (req.query.type === 'series') {
-                return (
-                    item.series &&
-                    item.series.some((series: any) => series.match(new RegExp(req.query.name as string, 'i')))
-                )
-            } else {
-                return (
-                    (item.title && item.title.match(search)) ||
-                    (item.subtitle && item.subtitle.match(search)) ||
-                    (item.description && item.description.match(search)) ||
-                    (item.publisher && item.publisher.match(search)) ||
-                    (item.isbn && item.isbn.match(search)) ||
-                    (item.language && item.language.match(search)) ||
-                    (item.publishedYear && item.publishedYear.match(search)) ||
-                    (item.authors && item.authors.some((author: any) => author.name.match(search))) ||
-                    (item.genres && item.genres.some((genre: any) => genre.match(search))) ||
-                    (item.tags && item.tags.some((tag: any) => tag.match(search)))
-                )
-            }
-        })
+    for (const field of ['q', 'author', 'title', 'name'] as const) {
+        const value = req.query[field]
+        if (value !== undefined && (typeof value !== 'string' || value.length > MAX_SEARCH_LENGTH)) {
+            res.status(400).send(`Invalid ${field} search value`)
+            return
+        }
     }
-    if (req.query.author) {
-        const author = req.query.author as string
-        const search = new RegExp(author, 'i')
-        parsedItems = parsedItems.filter(
-            (item: LibraryItem) => item.authors && item.authors.some((a: any) => a.name.match(search))
-        )
-    }
-    if (req.query.title) {
-        const title = req.query.title as string
-        const search = new RegExp(title, 'i')
-        parsedItems = parsedItems.filter(
-            (item: LibraryItem) =>
-                (item.title && item.title.match(search)) || (item.subtitle && item.subtitle.match(search))
-        )
-    }
+
+    parsedItems = filterLibraryItems(parsedItems, {
+        q: req.query.q as string | undefined,
+        author: req.query.author as string | undefined,
+        title: req.query.title as string | undefined,
+        type: req.query.type as string | undefined,
+        name: req.query.name as string | undefined
+    })
 
     if (req.query.sort !== 'recent') {
         sortItemsByTitle(parsedItems)
@@ -408,7 +379,7 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
 
     // Pagination
     const page = parseInt(req.query.page as string) || 0
-    const pageSize = process.env.OPDS_PAGE_SIZE ? parseInt(process.env.OPDS_PAGE_SIZE) : 20
+    const pageSize = opdsPageSize
     const startIndex = page * pageSize
     const endIndex = Math.min(startIndex + pageSize, parsedItems.length)
     const paginatedItems = parsedItems.slice(startIndex, endIndex)
@@ -455,34 +426,34 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
         return
     }
 
-    const items = await getLibraryItems(req.params.libraryId, user)
+    const items = await getLibraryItems(req.params.libraryId as string, user)
 
-    const library: Library = await apiCall(`/libraries/${req.params.libraryId}`, user)
+    const library: Library = await apiCall<Library>(`/libraries/${req.params.libraryId}`, user)
 
     let parsedItems: LibraryItem[] = parseItems(items)
 
     let distinctType = new Set<string>()
     parsedItems.forEach((item: LibraryItem) => {
         if (req.params.type === 'authors') {
-            item.authors.forEach((author: any) => {
+            item.authors.forEach((author) => {
                 distinctType.add(author.name.trim())
             })
         }
         if (req.params.type === 'narrators') {
-            item.narrators.forEach((narrator: any) => {
+            item.narrators.forEach((narrator) => {
                 distinctType.add(narrator.name.trim())
             })
         }
         if (req.params.type === 'genres') {
-            item.genres.forEach((genre: any) => {
+            item.genres.forEach((genre) => {
                 distinctType.add(genre.trim())
             })
-            item.tags.forEach((tag: any) => {
+            item.tags.forEach((tag) => {
                 distinctType.add(tag.trim())
             })
         }
         if (req.params.type === 'series') {
-            item.series.forEach((series: any) => {
+            item.series.forEach((series) => {
                 distinctType.add(series.trim())
             })
         }
@@ -509,7 +480,7 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
 
     if (!req.query.start && showCharCards) {
         // Iterate trough countByStartLetter
-        const itemCards: { item: string; link: string }[] = Object.entries(countByStartLetter).map(
+        const itemCards: CustomCard[] = Object.entries(countByStartLetter).map(
             ([letter, count]) => ({
                 item: `${letter.toUpperCase()} (${count})`,
                 link: `/opds/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`
@@ -542,8 +513,12 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
     )
 })
 
-app.listen(port, () => {
-    console.log(`OPDS server running at http://localhost:${port}/opds`)
-    console.log(`OPDS authentication: HTTP Basic Auth`)
-    console.log(`Server URL: ${serverURL}`)
-})
+export { app }
+
+if (!isTest) {
+    app.listen(port, () => {
+        console.log(`OPDS server running at http://localhost:${port}/opds`)
+        console.log(`OPDS authentication: HTTP Basic Auth`)
+        console.log(`Server URL: ${serverURL}`)
+    })
+}

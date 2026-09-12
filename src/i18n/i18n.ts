@@ -1,11 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import type { LocalizationEntry, Localizations, LocalizedStrings } from '../types/i18n.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const fallbackLanguage = 'en'
-
-type Localizations = Record<string, Record<string, string>>
 
 let localizations: Localizations = {}
 
@@ -21,7 +20,7 @@ export async function loadLocalizations() {
                 const filePath = path.join(directory, file)
                 try {
                     const content = await fs.promises.readFile(filePath, 'utf8')
-                    return [file.split('.')[0].toLowerCase(), JSON.parse(content)]
+                    return [file.split('.')[0].toLowerCase(), JSON.parse(content) as LocalizedStrings] as LocalizationEntry
                 } catch (err) {
                     console.error(`Failed to load ${file}:`, err)
                     return null
@@ -29,7 +28,7 @@ export async function loadLocalizations() {
             })
     )
 
-    localizations = Object.fromEntries(entries.filter(Boolean) as [string, any][])
+    localizations = Object.fromEntries(entries.filter(Boolean) as LocalizationEntry[])
 }
 
 export default function localize(key: string, lang?: string | string[]): string {

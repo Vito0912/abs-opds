@@ -16,9 +16,6 @@ importers:
             express:
                 specifier: ^5.2.1
                 version: 5.2.1
-            fuzzy-search:
-                specifier: ^3.2.1
-                version: 3.2.1
             tsx:
                 specifier: ^4.22.4
                 version: 4.22.4
@@ -29,30 +26,17 @@ importers:
             '@types/express':
                 specifier: ^5.0.6
                 version: 5.0.6
-            '@types/fuzzy-search':
-                specifier: ^2.1.5
-                version: 2.1.5
             '@types/node':
                 specifier: ^22.19.21
                 version: 22.19.21
             prettier:
                 specifier: 3.9.4
                 version: 3.9.4
-            ts-node:
-                specifier: ^10.9.2
-                version: 10.9.2(@types/node@22.19.21)(typescript@5.9.3)
             typescript:
                 specifier: ^5.9.3
                 version: 5.9.3
 
 packages:
-    '@cspotcode/source-map-support@0.8.1':
-        resolution:
-            {
-                integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==
-            }
-        engines: { node: '>=12' }
-
     '@esbuild/aix-ppc64@0.28.0':
         resolution:
             {
@@ -287,49 +271,6 @@ packages:
         cpu: [x64]
         os: [win32]
 
-    '@jridgewell/resolve-uri@3.1.2':
-        resolution:
-            {
-                integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==
-            }
-        engines: { node: '>=6.0.0' }
-
-    '@jridgewell/sourcemap-codec@1.5.5':
-        resolution:
-            {
-                integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==
-            }
-
-    '@jridgewell/trace-mapping@0.3.9':
-        resolution:
-            {
-                integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==
-            }
-
-    '@tsconfig/node10@1.0.12':
-        resolution:
-            {
-                integrity: sha512-UCYBaeFvM11aU2y3YPZ//O5Rhj+xKyzy7mvcIoAjASbigy8mHMryP5cK7dgjlz2hWxh1g5pLw084E0a/wlUSFQ==
-            }
-
-    '@tsconfig/node12@1.0.11':
-        resolution:
-            {
-                integrity: sha512-cqefuRsh12pWyGsIoBKJA9luFu3mRxCA+ORZvA4ktLSzIuCUtWVxGIuXigEwO5/ywWFMZ2QEGKWvkZG1zDMTag==
-            }
-
-    '@tsconfig/node14@1.0.3':
-        resolution:
-            {
-                integrity: sha512-ysT8mhdixWK6Hw3i1V2AeRqZ5WfXg1G43mqoYlM2nc6388Fq5jcXyr5mRsqViLx/GJYdoL0bfXD8nmF+Zn/Iow==
-            }
-
-    '@tsconfig/node16@1.0.4':
-        resolution:
-            {
-                integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==
-            }
-
     '@types/body-parser@1.19.6':
         resolution:
             {
@@ -352,12 +293,6 @@ packages:
         resolution:
             {
                 integrity: sha512-sKYVuV7Sv9fbPIt/442koC7+IIwK5olP1KWeD88e/idgoJqDm3JV/YUiPwkoKK92ylff2MGxSz1CSjsXelx0YA==
-            }
-
-    '@types/fuzzy-search@2.1.5':
-        resolution:
-            {
-                integrity: sha512-Yw8OsjhVKbKw83LMDOZ9RXc+N+um48DmZYMrz7QChpHkQuygsc5O40oCL7SfvWgpaaviCx2TbNXYUBwhMtBH5w==
             }
 
     '@types/http-errors@2.0.5':
@@ -403,33 +338,12 @@ packages:
             }
         engines: { node: '>= 0.6' }
 
-    acorn-walk@8.3.5:
-        resolution:
-            {
-                integrity: sha512-HEHNfbars9v4pgpW6SO1KSPkfoS0xVOM/9UzkJltjlsHZmJasxg8aXkuZa7SMf8vKGIBhpUsPluQSqhJFCqebw==
-            }
-        engines: { node: '>=0.4.0' }
-
-    acorn@8.16.0:
-        resolution:
-            {
-                integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==
-            }
-        engines: { node: '>=0.4.0' }
-        hasBin: true
-
     agent-base@6.0.2:
         resolution:
             {
                 integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==
             }
         engines: { node: '>= 6.0.0' }
-
-    arg@4.1.3:
-        resolution:
-            {
-                integrity: sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==
-            }
 
     asynckit@0.4.0:
         resolution:
@@ -513,12 +427,6 @@ packages:
             }
         engines: { node: '>= 0.6' }
 
-    create-require@1.1.1:
-        resolution:
-            {
-                integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==
-            }
-
     debug@4.4.3:
         resolution:
             {
@@ -544,13 +452,6 @@ packages:
                 integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==
             }
         engines: { node: '>= 0.8' }
-
-    diff@4.0.4:
-        resolution:
-            {
-                integrity: sha512-X07nttJQkwkfKfvTPG/KSnE2OMdcUCao6+eXF3wmnIQRn2aPAHH3VxDbDOdegkd6JbPsXqShpvEOHfAT+nCNwQ==
-            }
-        engines: { node: '>=0.3.1' }
 
     dotenv@17.4.2:
         resolution:
@@ -689,12 +590,6 @@ packages:
                 integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==
             }
 
-    fuzzy-search@3.2.1:
-        resolution:
-            {
-                integrity: sha512-vAcPiyomt1ioKAsAL2uxSABHJ4Ju/e4UeDM+g1OlR0vV4YhLGMNsdLNvZTpEDY4JCSt0E4hASCNM5t2ETtsbyg==
-            }
-
     get-intrinsic@1.3.0:
         resolution:
             {
@@ -775,12 +670,6 @@ packages:
         resolution:
             {
                 integrity: sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ==
-            }
-
-    make-error@1.3.6:
-        resolution:
-            {
-                integrity: sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw==
             }
 
     math-intrinsics@1.1.0:
@@ -996,23 +885,6 @@ packages:
             }
         engines: { node: '>=0.6' }
 
-    ts-node@10.9.2:
-        resolution:
-            {
-                integrity: sha512-f0FFpIdcHgn8zcPSbf1dRevwt047YMnaiJM3u2w2RewrB+fob/zePZcrOyQoLMMO7aBIddLcQIEK5dYjkLnGrQ==
-            }
-        hasBin: true
-        peerDependencies:
-            '@swc/core': '>=1.2.50'
-            '@swc/wasm': '>=1.2.50'
-            '@types/node': '*'
-            typescript: '>=2.7'
-        peerDependenciesMeta:
-            '@swc/core':
-                optional: true
-            '@swc/wasm':
-                optional: true
-
     tsx@4.22.4:
         resolution:
             {
@@ -1049,12 +921,6 @@ packages:
             }
         engines: { node: '>= 0.8' }
 
-    v8-compile-cache-lib@3.0.1:
-        resolution:
-            {
-                integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==
-            }
-
     vary@1.1.2:
         resolution:
             {
@@ -1075,18 +941,7 @@ packages:
             }
         engines: { node: '>=8.0' }
 
-    yn@3.1.1:
-        resolution:
-            {
-                integrity: sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==
-            }
-        engines: { node: '>=6' }
-
 snapshots:
-    '@cspotcode/source-map-support@0.8.1':
-        dependencies:
-            '@jridgewell/trace-mapping': 0.3.9
-
     '@esbuild/aix-ppc64@0.28.0':
         optional: true
 
@@ -1165,23 +1020,6 @@ snapshots:
     '@esbuild/win32-x64@0.28.0':
         optional: true
 
-    '@jridgewell/resolve-uri@3.1.2': {}
-
-    '@jridgewell/sourcemap-codec@1.5.5': {}
-
-    '@jridgewell/trace-mapping@0.3.9':
-        dependencies:
-            '@jridgewell/resolve-uri': 3.1.2
-            '@jridgewell/sourcemap-codec': 1.5.5
-
-    '@tsconfig/node10@1.0.12': {}
-
-    '@tsconfig/node12@1.0.11': {}
-
-    '@tsconfig/node14@1.0.3': {}
-
-    '@tsconfig/node16@1.0.4': {}
-
     '@types/body-parser@1.19.6':
         dependencies:
             '@types/connect': 3.4.38
@@ -1203,8 +1041,6 @@ snapshots:
             '@types/body-parser': 1.19.6
             '@types/express-serve-static-core': 5.1.1
             '@types/serve-static': 2.2.0
-
-    '@types/fuzzy-search@2.1.5': {}
 
     '@types/http-errors@2.0.5': {}
 
@@ -1230,19 +1066,11 @@ snapshots:
             mime-types: 3.0.2
             negotiator: 1.0.0
 
-    acorn-walk@8.3.5:
-        dependencies:
-            acorn: 8.16.0
-
-    acorn@8.16.0: {}
-
     agent-base@6.0.2:
         dependencies:
             debug: 4.4.3
         transitivePeerDependencies:
             - supports-color
-
-    arg@4.1.3: {}
 
     asynckit@0.4.0: {}
 
@@ -1296,8 +1124,6 @@ snapshots:
 
     cookie@0.7.2: {}
 
-    create-require@1.1.1: {}
-
     debug@4.4.3:
         dependencies:
             ms: 2.1.3
@@ -1305,8 +1131,6 @@ snapshots:
     delayed-stream@1.0.0: {}
 
     depd@2.0.0: {}
-
-    diff@4.0.4: {}
 
     dotenv@17.4.2: {}
 
@@ -1431,8 +1255,6 @@ snapshots:
 
     function-bind@1.1.2: {}
 
-    fuzzy-search@3.2.1: {}
-
     get-intrinsic@1.3.0:
         dependencies:
             call-bind-apply-helpers: 1.0.2
@@ -1487,8 +1309,6 @@ snapshots:
     ipaddr.js@1.9.1: {}
 
     is-promise@4.0.0: {}
-
-    make-error@1.3.6: {}
 
     math-intrinsics@1.1.0: {}
 
@@ -1619,24 +1439,6 @@ snapshots:
 
     toidentifier@1.0.1: {}
 
-    ts-node@10.9.2(@types/node@22.19.21)(typescript@5.9.3):
-        dependencies:
-            '@cspotcode/source-map-support': 0.8.1
-            '@tsconfig/node10': 1.0.12
-            '@tsconfig/node12': 1.0.11
-            '@tsconfig/node14': 1.0.3
-            '@tsconfig/node16': 1.0.4
-            '@types/node': 22.19.21
-            acorn: 8.16.0
-            acorn-walk: 8.3.5
-            arg: 4.1.3
-            create-require: 1.1.1
-            diff: 4.0.4
-            make-error: 1.3.6
-            typescript: 5.9.3
-            v8-compile-cache-lib: 3.0.1
-            yn: 3.1.1
-
     tsx@4.22.4:
         dependencies:
             esbuild: 0.28.0
@@ -1655,12 +1457,8 @@ snapshots:
 
     unpipe@1.0.0: {}
 
-    v8-compile-cache-lib@3.0.1: {}
-
     vary@1.1.2: {}
 
     wrappy@1.0.2: {}
 
     xmlbuilder@15.1.1: {}
-
-    yn@3.1.1: {}

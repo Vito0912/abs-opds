@@ -1,14 +1,13 @@
 import * as builder from 'xmlbuilder'
 import { XMLNode } from 'xmlbuilder'
 import { Library, LibraryItem } from '../types/library.js'
-import { serverURL, useProxy } from '../index.js'
+import { opdsPageSize, serverURL, useProxy } from '../config.js'
 import { InternalUser } from '../types/internal.js'
 import { Request } from 'express'
+import { OPDS_CATEGORY_TYPES } from '../types/opds.js'
+import type { CustomCard, OpdsCategory } from '../types/opds.js'
 import localize from '../i18n/i18n.js'
 import { buildDownloadFilename, getDownloadMimeType } from './download.js'
-
-export const OPDS_CATEGORY_TYPES = ['all', 'recent', 'authors', 'narrators', 'genres', 'series'] as const
-export type OpdsCategory = (typeof OPDS_CATEGORY_TYPES)[number]
 
 export function buildOPDSXMLSkeleton(
     id: string,
@@ -76,7 +75,7 @@ export function buildOPDSXMLSkeleton(
 
         // OpenSearch elements for pagination information
         if (totalItems !== undefined) {
-            const pageSize = process.env.OPDS_PAGE_SIZE ? parseInt(process.env.OPDS_PAGE_SIZE) : 20
+            const pageSize = opdsPageSize
             const currentPage = parseInt(request.query.page as string) || 0
             const startIndex = currentPage * pageSize + 1 // 1-based index for OpenSearch
 
@@ -91,7 +90,7 @@ export function buildOPDSXMLSkeleton(
 
         let totalPages = 0
         if (totalItems !== undefined) {
-            const pageSize = process.env.OPDS_PAGE_SIZE ? parseInt(process.env.OPDS_PAGE_SIZE) : 20
+            const pageSize = opdsPageSize
             totalPages = Math.ceil(totalItems / pageSize)
         }
 
@@ -278,7 +277,7 @@ export function buildCardEntries(
     })
 }
 
-export function buildCustomCardEntries(items: { item: string; link: string }[]): XMLNode[] {
+export function buildCustomCardEntries(items: CustomCard[]): XMLNode[] {
     return items.map((item) => {
         return builder
             .create('entry', { headless: true })
@@ -294,28 +293,34 @@ export function buildCustomCardEntries(items: { item: string; link: string }[]):
 }
 
 function buildEbookDownloadUrl(item: LibraryItem, user: InternalUser): string {
+    const itemId = encodeURIComponent(item.id)
+
     if (!useProxy) {
-        return `${serverURL}/api/items/${item.id}/ebook?token=${user.apiKey}`
+        const token = new URLSearchParams({ token: user.apiKey })
+        return `${serverURL}/api/items/${itemId}/ebook?${token.toString()}`
     }
 
-    const query = new URLSearchParams({
-        format: item.format,
-        token: user.apiKey
-    })
+    const query = new URLSearchParams()
+    if (item.format) {
+        query.set('format', item.format)
+    }
 
     const filename = encodeURIComponent(buildDownloadFilename(item.title, item.format))
 
-    return `/opds/proxy/download/${encodeURIComponent(item.id)}/${filename}?${query.toString()}`
+    return `/opds/proxy/download/${itemId}/${filename}?${query.toString()}`
 }
 
 export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser): XMLNode[] {
     const linkUrl = useProxy ? `/opds/proxy` : `${serverURL}`
+    const tokenQuery = useProxy ? '' : `?${new URLSearchParams({ token: user.apiKey }).toString()}`
 
     return libraryItems.map((item) => {
         const authors = item.authors
+        const itemUrl = `${linkUrl}/api/items/${encodeURIComponent(item.id)}`
+        const coverUrl = `${itemUrl}/cover`
         const downloadUrl = item.format
             ? buildEbookDownloadUrl(item, user)
-            : `${linkUrl}/api/items/${item.id}/download?token=${user.apiKey}`
+            : `${itemUrl}/download${tokenQuery}`
 
         let xml = builder
             .create('entry', { headless: true })
@@ -344,13 +349,13 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
             })
             .up()
             .ele('link', {
-                href: `${linkUrl}/api/items/${item.id}/cover?token=${user.apiKey}`,
+                href: coverUrl,
                 rel: 'http://opds-spec.org/image',
                 type: 'image/webp'
             })
             .up()
             .ele('link', {
-                href: `${linkUrl}/api/items/${item.id}/cover?token=${user.apiKey}`,
+                href: coverUrl,
                 rel: 'http://opds-spec.org/image',
                 type: 'image/png'
             })
