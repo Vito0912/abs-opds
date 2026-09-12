@@ -5,7 +5,7 @@ OPDS-Server for ABS (Audiobookshelf) is a working OPDS server that can be used w
 ## Features
 
 - [x] OPDS
-- [x] Searching
+- [x] Searching (case-insensitive substring match over title, author, description, publisher, ISBN and tags)
 - [x] Pagination
 - [x] Multiple Users
 - [x] ABS authentication or legacy API authentication
@@ -40,7 +40,7 @@ The following environment variables can be set in a `.env` file or directly in y
 | SHOW_AUDIOBOOKS | Show audiobooks in the OPDS feed. When disabled, top-level libraries/categories with no ebook items are hidden.                                                                                   | false          | No       |
 | SHOW_CHAR_CARDS | Show character cards (A, B, C, ...) before showing names of author, narrator, etc.                                                                                                                | false          | No       |
 | OPDS_CATEGORIES | Comma-separated categories to show in the listed order: `all`, `recent`, `authors`, `narrators`, `genres`, `series`. If unset, all categories are shown in the default order.                     | all categories | No       |
-| USE_PROXY       | Use a proxy to connect to ABS. If you use the docker network, set this to true to view covers in your reader. Creates potential security risks if someone can read the RAM of the software.       | false          | No       |
+| USE_PROXY       | Serve covers and downloads through this server instead of linking to ABS directly. Set this to true if you use the docker network, so covers load in your reader. The proxy only forwards to `ABS_URL` and will not fetch any other host. Your ABS token is held in memory, so it is exposed to anyone able to read the process memory. | false          | No       |
 | PORT            | The port the OPDS server will run on.                                                                                                                                                             | 3010           | No       |
 | OPDS_PAGE_SIZE  | Number of items on each page in the OPDS feed.                                                                                                                                                    | 20             | No       |
 | OPDS_USERS      | Comma-separated list of users in the format `username:ABS_API_TOKEN:password`. This does NOT need to be your ABS username and password, but values you can freely set to log in with your reader. |                | No       |

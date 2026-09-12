@@ -13,8 +13,16 @@ import {
     type OpdsCategory
 } from './helpers/abs.js'
 import { apiCall, downloadItemFromAudiobookshelf, loginToAudiobookshelf, proxyToAudiobookshelf } from './helpers/api.js'
+import {
+    isNameCategory,
+    matchesAuthor,
+    matchesFreeText,
+    matchesNameCategory,
+    matchesTitle,
+    normalizeSearchTerm
+} from './helpers/search.js'
 import { Library, LibraryItem } from './types/library.js'
-import { hash } from 'crypto'
+import { createHash, hash, timingSafeEqual } from 'crypto'
 import { loadLocalizations } from './i18n/i18n.js'
 
 const app = express()
@@ -37,7 +45,7 @@ interface CacheEntry {
     data: any
 }
 const libraryItemsCache: Record<string, CacheEntry> = {}
-const CACHE_EXPIRATION = process.env.CACHE_EXPIRATION ? parseInt(process.env.CACHE_EXPIRATION)*1000 : 60 * 60 * 1000 // 1 hour in milliseconds
+const CACHE_EXPIRATION = process.env.CACHE_EXPIRATION ? parseInt(process.env.CACHE_EXPIRATION) * 1000 : 60 * 60 * 1000 // 1 hour in milliseconds
 
 function parseOPDSCategories(value?: string): OpdsCategory[] {
     if (!value?.trim()) {
@@ -92,6 +100,32 @@ function getLibraryItemsCategory(req: Request): OpdsCategory | null {
     return 'all'
 }
 
+/**
+ * Compares two secrets without leaking their contents through timing.
+ * Both sides are hashed first so the comparison is over equal-length buffers.
+ */
+function secretsMatch(a: string, b: string): boolean {
+    const digestA = createHash('sha256').update(a).digest()
+    const digestB = createHash('sha256').update(b).digest()
+    return timingSafeEqual(digestA, digestB)
+}
+
+function findInternalUser(username: string, password: string): InternalUser | undefined {
+    let match: InternalUser | undefined
+
+    // Every configured user is checked, with no early exit, so the response time
+    // does not reveal which usernames exist.
+    for (const user of internalUsers) {
+        const nameMatches = secretsMatch(user.name.toLowerCase(), username.toLowerCase())
+        const passwordMatches = secretsMatch(user.password ?? '', password)
+        if (nameMatches && passwordMatches) {
+            match = user
+        }
+    }
+
+    return match
+}
+
 async function authenticateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const authHeader = req.headers.authorization
 
@@ -111,8 +145,10 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
 
     try {
         const base64Credentials = authHeader.split(' ')[1]
-        const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii')
-        const [username, password] = credentials.split(':')
+        const credentials = Buffer.from(base64Credentials, 'base64').toString('utf8')
+        const separatorIndex = credentials.indexOf(':')
+        const username = separatorIndex === -1 ? '' : credentials.slice(0, separatorIndex)
+        const password = separatorIndex === -1 ? '' : credentials.slice(separatorIndex + 1)
 
         if (!username || !password) {
             if (process.env.NODE_ENV === 'development') {
@@ -128,9 +164,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         }
 
         // First try internal users (for backwards compatibility)
-        const internalUser = internalUsers.find(
-            (u) => u.name.toLowerCase() === username.toLowerCase() && u.password === password
-        )
+        const internalUser = findInternalUser(username, password)
 
         if (internalUser) {
             if (process.env.NODE_ENV === 'development') {
@@ -224,7 +258,7 @@ async function getLibraryItems(libraryId: string | string[], user: InternalUser)
         return libraryItemsCache[cacheKey].data
     }
 
-    const items = await apiCall(`/libraries/${libraryId}/items`, user)
+    const items = await apiCall(`/libraries/${encodeURIComponent(libraryId)}/items`, user)
     libraryItemsCache[cacheKey] = { timestamp: Date.now(), data: items }
     return items
 }
@@ -331,7 +365,7 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
 
     const items = await getLibraryItems(req.params.libraryId, user)
 
-    const library: Library = await apiCall(`/libraries/${req.params.libraryId}`, user)
+    const library: Library = await apiCall(`/libraries/${encodeURIComponent(req.params.libraryId as string)}`, user)
 
     let parsedItems: LibraryItem[] = parseItems(items)
 
@@ -344,62 +378,28 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
         })
     }
 
-    // Filter based on query, author, or title if provided
-    if (req.query.q || req.query.type) {
-        const query = req.query.q as string
-        const search = new RegExp(query, 'i')
-        parsedItems = parsedItems.filter((item: LibraryItem) => {
-            if (req.query.type === 'authors') {
-                return (
-                    item.authors &&
-                    item.authors.some((author: any) => author.name.match(new RegExp(req.query.name as string, 'i')))
-                )
-            } else if (req.query.type === 'narrators') {
-                return (
-                    item.narrators &&
-                    item.narrators.some((author: any) => author.name.match(new RegExp(req.query.name as string, 'i')))
-                )
-            } else if (req.query.type === 'genres') {
-                return (
-                    (item.genres &&
-                        item.genres.some((genre: any) => genre.match(new RegExp(req.query.name as string, 'i')))) ||
-                    (item.tags && item.tags.some((tag: any) => tag.match(new RegExp(req.query.name as string, 'i'))))
-                )
-            } else if (req.query.type === 'series') {
-                return (
-                    item.series &&
-                    item.series.some((series: any) => series.match(new RegExp(req.query.name as string, 'i')))
-                )
-            } else {
-                return (
-                    (item.title && item.title.match(search)) ||
-                    (item.subtitle && item.subtitle.match(search)) ||
-                    (item.description && item.description.match(search)) ||
-                    (item.publisher && item.publisher.match(search)) ||
-                    (item.isbn && item.isbn.match(search)) ||
-                    (item.language && item.language.match(search)) ||
-                    (item.publishedYear && item.publishedYear.match(search)) ||
-                    (item.authors && item.authors.some((author: any) => author.name.match(search))) ||
-                    (item.genres && item.genres.some((genre: any) => genre.match(search))) ||
-                    (item.tags && item.tags.some((tag: any) => tag.match(search)))
-                )
-            }
-        })
+    // Filter based on query, author, or title if provided. Search terms are
+    // matched as literal substrings rather than compiled to regular expressions:
+    // a user-supplied pattern could otherwise backtrack catastrophically and
+    // stall the single-threaded process, or fail to parse and return a 500.
+    const typeParam = typeof req.query.type === 'string' ? req.query.type : undefined
+    const nameTerm = normalizeSearchTerm(req.query.name)
+    const queryTerm = normalizeSearchTerm(req.query.q)
+
+    if (typeParam && isNameCategory(typeParam) && nameTerm) {
+        parsedItems = parsedItems.filter((item) => matchesNameCategory(item, typeParam, nameTerm))
+    } else if (queryTerm) {
+        parsedItems = parsedItems.filter((item) => matchesFreeText(item, queryTerm))
     }
-    if (req.query.author) {
-        const author = req.query.author as string
-        const search = new RegExp(author, 'i')
-        parsedItems = parsedItems.filter(
-            (item: LibraryItem) => item.authors && item.authors.some((a: any) => a.name.match(search))
-        )
+
+    const authorTerm = normalizeSearchTerm(req.query.author)
+    if (authorTerm) {
+        parsedItems = parsedItems.filter((item) => matchesAuthor(item, authorTerm))
     }
-    if (req.query.title) {
-        const title = req.query.title as string
-        const search = new RegExp(title, 'i')
-        parsedItems = parsedItems.filter(
-            (item: LibraryItem) =>
-                (item.title && item.title.match(search)) || (item.subtitle && item.subtitle.match(search))
-        )
+
+    const titleTerm = normalizeSearchTerm(req.query.title)
+    if (titleTerm) {
+        parsedItems = parsedItems.filter((item) => matchesTitle(item, titleTerm))
     }
 
     if (req.query.sort !== 'recent') {
@@ -457,7 +457,7 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
 
     const items = await getLibraryItems(req.params.libraryId, user)
 
-    const library: Library = await apiCall(`/libraries/${req.params.libraryId}`, user)
+    const library: Library = await apiCall(`/libraries/${encodeURIComponent(req.params.libraryId as string)}`, user)
 
     let parsedItems: LibraryItem[] = parseItems(items)
 

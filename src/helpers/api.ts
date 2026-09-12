@@ -3,6 +3,8 @@ import type { Request, Response } from 'express'
 import axios from 'axios'
 import { serverURL, useProxy } from '../index.js'
 import crypto from 'crypto'
+import { promisify } from 'util'
+import { resolveUpstreamURL } from './upstream.js'
 import {
     buildContentDisposition,
     getDownloadExtension,
@@ -12,57 +14,91 @@ import {
 } from './download.js'
 
 interface CachedToken {
-    hashedToken: string
+    encryptedToken: string
     expires: number
 }
 
 const tokenCache = new Map<string, CachedToken>()
 const CACHE_TTL = 10 * 60 * 1000
 
-// https://stackoverflow.com/questions/6953286/how-to-encrypt-data-that-needs-to-be-decrypted-in-node-js
-function encryptTokenWithPassword(token: string, password: string): string {
-    const key = crypto.scryptSync(password, 'salt', 32)
-    const iv = crypto.randomBytes(16)
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
-    let encrypted = cipher.update(token, 'utf8', 'hex')
-    encrypted += cipher.final('hex')
-    return iv.toString('hex') + ':' + encrypted
+const scryptAsync = promisify(crypto.scrypt) as (
+    password: crypto.BinaryLike,
+    salt: crypto.BinaryLike,
+    keylen: number
+) => Promise<Buffer>
+
+/**
+ * Derives the token-encryption key from the user's password.
+ *
+ * scrypt is intentionally expensive, so this uses the asynchronous variant: the
+ * synchronous one blocked the event loop for tens of milliseconds on every
+ * authenticated request, capping the whole server's throughput.
+ */
+async function deriveKey(password: string, salt: Buffer): Promise<Buffer> {
+    return scryptAsync(password, salt, 32)
 }
 
-function decryptToken(hashedToken: string, password: string): string {
-    const [ivHex, encrypted] = hashedToken.split(':')
-    const key = crypto.scryptSync(password, 'salt', 32)
-    const iv = Buffer.from(ivHex, 'hex')
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-    decrypted += decipher.final('utf8')
-    return decrypted
+/**
+ * Encrypts an Audiobookshelf token with a key derived from the user's password,
+ * so a cached token is not recoverable from process memory alone.
+ *
+ * AES-GCM is used rather than CBC: its authentication tag makes decryption with
+ * the wrong password fail deterministically. Unauthenticated CBC only failed via
+ * a padding error, so roughly one wrong password in 256 decrypted to garbage
+ * that was then accepted as a valid session.
+ */
+async function encryptTokenWithPassword(token: string, password: string): Promise<string> {
+    const salt = crypto.randomBytes(16)
+    const key = await deriveKey(password, salt)
+    const iv = crypto.randomBytes(12)
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+    const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()])
+
+    return [salt, iv, cipher.getAuthTag(), encrypted].map((part) => part.toString('hex')).join(':')
 }
 
-function getCachedToken(username: string, password: string): string | null {
+async function decryptToken(payload: string, password: string): Promise<string | null> {
+    const parts = payload.split(':')
+    if (parts.length !== 4) {
+        return null
+    }
+
+    try {
+        const [salt, iv, authTag, encrypted] = parts.map((part) => Buffer.from(part, 'hex'))
+        const key = await deriveKey(password, salt)
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
+        decipher.setAuthTag(authTag)
+        return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
+    } catch {
+        return null
+    }
+}
+
+async function getCachedToken(username: string, password: string): Promise<string | null> {
     const cached = tokenCache.get(username)
     if (!cached || Date.now() > cached.expires) {
         if (cached) tokenCache.delete(username)
         return null
     }
-    try {
-        return decryptToken(cached.hashedToken, password)
-    } catch {
-        tokenCache.delete(username)
-        return null
-    }
+
+    // Wrong password, or an entry we can no longer read.
+    return await decryptToken(cached.encryptedToken, password)
 }
 
-function setCachedToken(username: string, token: string, password: string): void {
-    const hashedToken = encryptTokenWithPassword(token, password)
+async function setCachedToken(username: string, token: string, password: string): Promise<void> {
     tokenCache.set(username, {
-        hashedToken,
+        encryptedToken: await encryptTokenWithPassword(token, password),
         expires: Date.now() + CACHE_TTL
     })
 }
 
 export async function apiCall(path: string, user: InternalUser) {
-    const request = await axios.get(serverURL + '/api' + path, {
+    const target = resolveUpstreamURL(serverURL, `/api${path.startsWith('/') ? path : `/${path}`}`)
+    if (!target) {
+        throw new Error(`Refusing to call a path outside the Audiobookshelf server: ${path}`)
+    }
+
+    const request = await axios.get(target.toString(), {
         headers: {
             Authorization: `Bearer ${user.apiKey}`
         }
@@ -77,7 +113,7 @@ export async function apiCall(path: string, user: InternalUser) {
 
 export async function loginToAudiobookshelf(username: string, password: string): Promise<InternalUser | null> {
     try {
-        const cachedToken = getCachedToken(username, password)
+        const cachedToken = await getCachedToken(username, password)
         if (cachedToken) {
             if (process.env.NODE_ENV === 'development') {
                 console.log(`[DEBUG] Using cached token for user: ${username}`)
@@ -107,7 +143,7 @@ export async function loginToAudiobookshelf(username: string, password: string):
                 console.log(`[DEBUG] ABS login successful for user: ${userData.username}`)
             }
 
-            setCachedToken(username, userData.accessToken, password)
+            await setCachedToken(username, userData.accessToken, password)
 
             return {
                 name: userData.username,
@@ -140,10 +176,14 @@ export async function proxyToAudiobookshelf(req: Request, res: Response) {
         return
     }
 
-    try {
-        const target = new URL(req.originalUrl.replace(/^\/opds\/proxy/, ''), serverURL).toString()
+    const target = resolveUpstreamURL(serverURL, req.originalUrl.replace(/^\/opds\/proxy/, ''))
+    if (!target) {
+        res.status(400).send('Invalid proxy target')
+        return
+    }
 
-        const response = await axios.get(target, {
+    try {
+        const response = await axios.get(target.toString(), {
             responseType: 'stream',
             headers: {
                 'x-forwarded-proto': req.protocol,
@@ -211,7 +251,7 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
         res.status(405).send('Method Not Allowed')
         return
     }
-    
+
     if (!useProxy) {
         res.status(403).send('Forbidden')
         return
@@ -236,12 +276,16 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
     const filename = requestedFilename.toLowerCase().endsWith(`.${extension}`)
         ? requestedFilename
         : `${requestedFilename}.${extension}`
-    const target = new URL(`/api/items/${encodeURIComponent(itemId)}/ebook`, serverURL).toString()
+    const target = resolveUpstreamURL(serverURL, `/api/items/${encodeURIComponent(itemId)}/ebook`)
+    if (!target) {
+        res.status(400).send('Invalid download request')
+        return
+    }
 
     try {
         const response = await axios.request({
             method: req.method,
-            url: target,
+            url: target.toString(),
             responseType: 'stream',
             headers: {
                 Authorization: `Bearer ${token}`

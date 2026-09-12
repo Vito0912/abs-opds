@@ -9,7 +9,9 @@
     "scripts": {
         "build": "tsc && cp -r src/i18n/languages dist/i18n/languages",
         "start": "tsx src/index.ts",
-        "dev": "tsx --watch src/index.ts"
+        "dev": "tsx --watch src/index.ts",
+        "test": "tsx --test test/*.test.ts",
+        "typecheck": "tsc --noEmit"
     },
     "devDependencies": {
         "@types/express": "^5.0.6",
