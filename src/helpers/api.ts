@@ -1,7 +1,7 @@
 import { InternalUser } from '../types/internal.js'
 import type { Request, Response } from 'express'
 import axios from 'axios'
-import { serverURL, useProxy } from '../index.js'
+import { isDevelopment, serverURL, useProxy } from '../config.js'
 import crypto from 'crypto'
 import { promisify } from 'util'
 import { resolveUpstreamURL } from './upstream.js'
@@ -74,7 +74,18 @@ async function decryptToken(payload: string, password: string): Promise<string |
     }
 }
 
+function pruneTokenCache(): void {
+    const now = Date.now()
+    for (const [key, entry] of tokenCache) {
+        if (now > entry.expires) {
+            tokenCache.delete(key)
+        }
+    }
+}
+
 async function getCachedToken(username: string, password: string): Promise<string | null> {
+    pruneTokenCache()
+
     const cached = tokenCache.get(username)
     if (!cached || Date.now() > cached.expires) {
         if (cached) tokenCache.delete(username)
@@ -115,7 +126,7 @@ export async function loginToAudiobookshelf(username: string, password: string):
     try {
         const cachedToken = await getCachedToken(username, password)
         if (cachedToken) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log(`[DEBUG] Using cached token for user: ${username}`)
             }
             return {
@@ -124,7 +135,7 @@ export async function loginToAudiobookshelf(username: string, password: string):
             }
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Attempting ABS login to: ${serverURL}/login`)
         }
 
@@ -133,13 +144,13 @@ export async function loginToAudiobookshelf(username: string, password: string):
             password: password
         })
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] ABS login response status: ${response.status}`)
         }
 
         if (response.status === 200 && response.data.user) {
             const userData = response.data.user
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log(`[DEBUG] ABS login successful for user: ${userData.username}`)
             }
 
@@ -152,7 +163,7 @@ export async function loginToAudiobookshelf(username: string, password: string):
         }
         return null
     } catch (error: any) {
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] ABS login failed:`, error.response?.status, error.response?.data || error.message)
         } else {
             console.error('Login failed:', error.response?.status || error.message)
@@ -162,7 +173,7 @@ export async function loginToAudiobookshelf(username: string, password: string):
 }
 
 export async function proxyToAudiobookshelf(req: Request, res: Response) {
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevelopment) {
         console.log(`[DEBUG] Attempting ABS proxy for request: ${req.originalUrl}`)
     }
 
@@ -210,7 +221,7 @@ export async function proxyToAudiobookshelf(req: Request, res: Response) {
 
         pipeUpstream(response.data, res)
     } catch (err) {
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.error('[DEBUG] ABS proxy error:', err)
         }
         if (!res.headersSent) {
@@ -338,7 +349,7 @@ export async function downloadItemFromAudiobookshelf(req: Request, res: Response
 
         pipeUpstream(response.data, res)
     } catch (err) {
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.error('[DEBUG] ABS download proxy error:', err)
         }
         if (!res.headersSent) {

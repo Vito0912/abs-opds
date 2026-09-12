@@ -1,17 +1,13 @@
 import * as builder from 'xmlbuilder'
 import { XMLNode } from 'xmlbuilder'
 import { Library, LibraryItem } from '../types/library.js'
-import { serverURL, useProxy } from '../index.js'
+import { pageSize, serverURL, useProxy } from '../config.js'
+import { OPDS_CATEGORY_TYPES, type OpdsCategory } from '../types/opds.js'
 import { InternalUser } from '../types/internal.js'
 import { Request } from 'express'
 import localize from '../i18n/i18n.js'
 import { buildDownloadFilename, getDownloadMimeType } from './download.js'
 import { buildPageHref } from './paging.js'
-
-/** Route and query params are typed string | string[]; take a single value. */
-function single(value: string | string[]): string {
-    return Array.isArray(value) ? (value[0] ?? '') : value
-}
 
 function entryBase(id: string, title: string): XMLNode {
     // Atom requires id, title and updated on every entry (RFC 4287 section 4.1.2).
@@ -38,9 +34,6 @@ function navigationEntry(id: string, title: string, href: string): XMLNode {
 function slugify(value: string): string {
     return value.toLowerCase().replace(/\s+/g, '-')
 }
-
-export const OPDS_CATEGORY_TYPES = ['all', 'recent', 'authors', 'narrators', 'genres', 'series'] as const
-export type OpdsCategory = (typeof OPDS_CATEGORY_TYPES)[number]
 
 export function buildOPDSXMLSkeleton(
     id: string,
@@ -107,7 +100,6 @@ export function buildOPDSXMLSkeleton(
         })
 
         const currentPage = Math.max(0, parseInt(request.query.page as string) || 0)
-        const pageSize = process.env.OPDS_PAGE_SIZE ? parseInt(process.env.OPDS_PAGE_SIZE) : 20
 
         // OpenSearch elements for pagination information
         if (totalItems !== undefined) {
@@ -173,14 +165,11 @@ export function buildLibraryEntries(libraries: Library[], user: InternalUser): X
 }
 
 export function buildCategoryEntries(
-    libraryId: string | string[],
+    libraryId: string,
     user: InternalUser,
     lang?: string | string[],
     enabledCategories: readonly OpdsCategory[] = OPDS_CATEGORY_TYPES
 ): XMLNode[] {
-    if (Array.isArray(libraryId)) {
-        return []
-    }
     const libraryPath = `/opds/libraries/${encodeURIComponent(libraryId)}`
 
     const entries: Record<OpdsCategory, () => XMLNode> = {
@@ -195,18 +184,13 @@ export function buildCategoryEntries(
     return enabledCategories.map((category) => entries[category]())
 }
 
-export function buildCardEntries(
-    items: string[],
-    type: string | string[],
-    user: InternalUser,
-    libraryId: string | string[]
-): XMLNode[] {
-    const libraryPath = `/opds/libraries/${encodeURIComponent(single(libraryId))}`
+export function buildCardEntries(items: string[], type: string, user: InternalUser, libraryId: string): XMLNode[] {
+    const libraryPath = `/opds/libraries/${encodeURIComponent(libraryId)}`
 
     return items.map((item) => {
         // encodeURIComponent, not encodeURI: names containing & # / + ? would
         // otherwise survive into the query string and be parsed as syntax.
-        const query = new URLSearchParams({ name: item, type: single(type) })
+        const query = new URLSearchParams({ name: item, type })
         return navigationEntry(slugify(item), item, `${libraryPath}?${query.toString()}`)
     })
 }
@@ -290,7 +274,7 @@ export function buildItemEntries(libraryItems: LibraryItem[], user: InternalUser
     })
 }
 
-export function buildSearchDefinition(id: string | string[], user: InternalUser) {
+export function buildSearchDefinition(id: string, user: InternalUser) {
     return builder
         .create('OpenSearchDescription', { version: '1.0', encoding: 'UTF-8' })
         .att('xmlns', 'http://a9.com/-/spec/opensearch/1.1/')
@@ -303,7 +287,7 @@ export function buildSearchDefinition(id: string | string[], user: InternalUser)
         .up()
         .ele('Url', {
             type: 'application/atom+xml;profile=opds-catalog;kind=acquisition',
-            template: `/opds/libraries/${encodeURIComponent(single(id))}?q={searchTerms}&amp;author={atom:author}&amp;title={atom:title}`
+            template: `/opds/libraries/${encodeURIComponent(id)}?q={searchTerms}&amp;author={atom:author}&amp;title={atom:title}`
         })
         .up()
         .end({ pretty: true })

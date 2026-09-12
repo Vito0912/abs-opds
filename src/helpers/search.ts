@@ -1,11 +1,5 @@
 import { Author, LibraryItem } from '../types/library.js'
-
-export const NAME_CATEGORIES = ['authors', 'narrators', 'genres', 'series'] as const
-export type NameCategory = (typeof NAME_CATEGORIES)[number]
-
-export function isNameCategory(value: unknown): value is NameCategory {
-    return typeof value === 'string' && (NAME_CATEGORIES as readonly string[]).includes(value)
-}
+import { OpdsNameCategory } from '../types/opds.js'
 
 /**
  * Normalizes a raw query-string value into a comparable search term.
@@ -37,7 +31,7 @@ function anyNameContains(values: readonly Author[] | undefined, term: string): b
     return Array.isArray(values) && values.some((value) => fieldContains(value?.name, term))
 }
 
-export function matchesNameCategory(item: LibraryItem, category: NameCategory, term: string): boolean {
+export function matchesNameCategory(item: LibraryItem, category: OpdsNameCategory, term: string): boolean {
     switch (category) {
         case 'authors':
             return anyNameContains(item.authors, term)

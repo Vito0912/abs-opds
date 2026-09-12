@@ -36,15 +36,22 @@ The following environment variables can be set in a `.env` file or directly in y
 
 | Variable        | Description                                                                                                                                                                                       | Default        | Required |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------- |
-| ABS_URL         | Your Audiobookshelf server URL, e.g. https://audiobooks.dev                                                                                                                                       |                | Yes      |
+| ABS_URL         | Your Audiobookshelf server URL, e.g. https://audiobooks.dev. Must be a valid http/https URL; the server exits at startup if it is not. The default only works if ABS runs on the same host on port 3000. | `http://localhost:3000` | No |
 | SHOW_AUDIOBOOKS | Show audiobooks in the OPDS feed. When disabled, top-level libraries/categories with no ebook items are hidden.                                                                                   | false          | No       |
 | SHOW_CHAR_CARDS | Show character cards (A, B, C, ...) before showing names of author, narrator, etc.                                                                                                                | false          | No       |
 | OPDS_CATEGORIES | Comma-separated categories to show in the listed order: `all`, `recent`, `authors`, `narrators`, `genres`, `series`. If unset, all categories are shown in the default order.                     | all categories | No       |
 | USE_PROXY       | Serve covers and downloads through this server instead of linking to ABS directly. Set this to true if you use the docker network, so covers load in your reader. The proxy only forwards to `ABS_URL` and will not fetch any other host. Your ABS token is held in memory, so it is exposed to anyone able to read the process memory. | false          | No       |
 | PORT            | The port the OPDS server will run on.                                                                                                                                                             | 3010           | No       |
 | OPDS_PAGE_SIZE  | Number of items on each page in the OPDS feed.                                                                                                                                                    | 20             | No       |
-| OPDS_USERS      | Comma-separated list of users in the format `username:ABS_API_TOKEN:password`. This does NOT need to be your ABS username and password, but values you can freely set to log in with your reader. |                | No       |
-| CACHE_EXPIRATION  | Amount of time to cache requests, in seconds                                                                                                                                                   | 3600             | No       |
+| OPDS_USERS      | Comma-separated list of users in the format `username:ABS_API_TOKEN:password`. This does NOT need to be your ABS username and password, but values you can freely set to log in with your reader. Entries missing any of the three fields are skipped with a warning. |                | No       |
+| CACHE_EXPIRATION | Amount of time to cache requests, in seconds                                                                                                                                       | 3600           | No       |
+| NODE_ENV        | Set to `development` for verbose authentication and proxy debug logging. Use `production` when deploying.                                                                                          |                | No       |
+
+Boolean variables (`SHOW_AUDIOBOOKS`, `SHOW_CHAR_CARDS`, `USE_PROXY`) accept `true`/`1`/`yes` and
+`false`/`0`/`no`, case-insensitively. Numeric variables (`PORT`, `OPDS_PAGE_SIZE`,
+`CACHE_EXPIRATION`) must be positive integers. Any value that cannot be parsed is ignored with a
+warning on startup and the default is used, so a typo will not silently disable caching or paging.
+
 ## Attribution
 
 Thanks to [Martin Joneš](https://github.com/jondycz) for helping with some features and adding this to TrueNas.
@@ -64,3 +71,21 @@ I plan to add these once the refactoring is finished. This can take months or ye
 ## Docker Compose
 
 See `docker-compose.yml` for an example setup.
+
+## Development
+
+```bash
+pnpm install
+pnpm dev        # run from source with watch mode
+pnpm typecheck  # tsc --noEmit
+pnpm test       # node:test suite, no extra dependencies
+pnpm format     # prettier
+pnpm build      # compile to dist/
+```
+
+`pnpm start` runs the TypeScript sources directly. The Docker image compiles in a separate build
+stage and ships only the runtime dependencies.
+
+## License
+
+Licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE).

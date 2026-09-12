@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { InternalUser } from './types/internal.js'
-import 'dotenv/config'
 import {
     buildCardEntries,
     buildCategoryEntries,
@@ -8,13 +7,11 @@ import {
     buildItemEntries,
     buildLibraryEntries,
     buildOPDSXMLSkeleton,
-    buildSearchDefinition,
-    OPDS_CATEGORY_TYPES,
-    type OpdsCategory
+    buildSearchDefinition
 } from './helpers/abs.js'
+import { isOpdsCategory, isOpdsNameCategory, type OpdsCategory } from './types/opds.js'
 import { apiCall, downloadItemFromAudiobookshelf, loginToAudiobookshelf, proxyToAudiobookshelf } from './helpers/api.js'
 import {
-    isNameCategory,
     matchesAuthor,
     matchesFreeText,
     matchesNameCategory,
@@ -24,48 +21,45 @@ import {
 import { Library, LibraryItem } from './types/library.js'
 import { createHash, hash, timingSafeEqual } from 'crypto'
 import { loadLocalizations } from './i18n/i18n.js'
+import {
+    cacheExpirationMs,
+    enabledOPDSCategories,
+    internalUsers,
+    isDevelopment,
+    pageSize,
+    port,
+    serverURL,
+    showAudioBooks,
+    showCharCards
+} from './config.js'
 
 const app = express()
-const port = process.env.PORT || 3010
-export const useProxy = process.env.USE_PROXY === 'true' || false
-export const serverURL = process.env.ABS_URL || 'http://localhost:3000'
-const internalUsersString = process.env.OPDS_USERS || ''
-const showAudioBooks = process.env.SHOW_AUDIOBOOKS === 'true' || false
-const showCharCards = process.env.SHOW_CHAR_CARDS === 'true' || false
-const enabledOPDSCategories = parseOPDSCategories(process.env.OPDS_CATEGORIES)
-await loadLocalizations()
+app.disable('x-powered-by')
 
-const internalUsers: InternalUser[] = internalUsersString.split(',').map((user) => {
-    const [name, apiKey, password] = user.split(':')
-    return { name, apiKey, password }
-})
+await loadLocalizations()
 
 interface CacheEntry {
     timestamp: number
     data: any
 }
-const libraryItemsCache: Record<string, CacheEntry> = {}
-const CACHE_EXPIRATION = process.env.CACHE_EXPIRATION ? parseInt(process.env.CACHE_EXPIRATION) * 1000 : 60 * 60 * 1000 // 1 hour in milliseconds
+const libraryItemsCache = new Map<string, CacheEntry>()
 
-function parseOPDSCategories(value?: string): OpdsCategory[] {
-    if (!value?.trim()) {
-        return [...OPDS_CATEGORY_TYPES]
+/** Strips combining diacritical marks so "Ä" and "A" group under the same letter. */
+function stripDiacritics(value: string): string {
+    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/**
+ * Express types route params as string | string[]; a repeated param would
+ * otherwise flow into upstream paths as an array. Reject anything but a single value.
+ */
+function getRouteParam(req: Request, name: string, res: Response): string | null {
+    const value = (req.params as Record<string, string | string[] | undefined>)[name]
+    if (typeof value === 'string' && value) {
+        return value
     }
-
-    const categories: OpdsCategory[] = []
-    for (const category of value.split(',')) {
-        const normalizedCategory = category.trim().toLowerCase()
-        if ((OPDS_CATEGORY_TYPES as readonly string[]).includes(normalizedCategory)) {
-            const opdsCategory = normalizedCategory as OpdsCategory
-            if (!categories.includes(opdsCategory)) {
-                categories.push(opdsCategory)
-            }
-        } else if (normalizedCategory) {
-            console.warn(`Ignoring unknown OPDS category "${normalizedCategory}"`)
-        }
-    }
-
-    return categories
+    res.status(400).send('Invalid request')
+    return null
 }
 
 function ensureOPDSCategoryIsEnabled(category: OpdsCategory, res: Response): boolean {
@@ -77,20 +71,13 @@ function ensureOPDSCategoryIsEnabled(category: OpdsCategory, res: Response): boo
     return false
 }
 
-function getRouteCategory(type: string | string[]): OpdsCategory | null {
-    if (Array.isArray(type)) {
-        return null
-    }
-    return (OPDS_CATEGORY_TYPES as readonly string[]).includes(type) ? (type as OpdsCategory) : null
-}
-
 function getLibraryItemsCategory(req: Request): OpdsCategory | null {
     if (req.query.sort === 'recent') {
         return 'recent'
     }
 
     if (typeof req.query.type === 'string') {
-        return getRouteCategory(req.query.type)
+        return isOpdsCategory(req.query.type) ? req.query.type : null
     }
 
     if (req.query.q || req.query.author || req.query.title) {
@@ -129,13 +116,13 @@ function findInternalUser(username: string, password: string): InternalUser | un
 async function authenticateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     const authHeader = req.headers.authorization
 
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevelopment) {
         console.log(`[DEBUG] Auth attempt for ${req.method} ${req.path}`)
         console.log(`[DEBUG] Auth header present: ${!!authHeader}`)
     }
 
     if (!authHeader || !authHeader.startsWith('Basic ')) {
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log('[DEBUG] No valid Basic Auth header found')
         }
         res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -151,7 +138,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         const password = separatorIndex === -1 ? '' : credentials.slice(separatorIndex + 1)
 
         if (!username || !password) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log('[DEBUG] Invalid credentials format')
             }
             res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -159,7 +146,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
             return
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Attempting authentication for user: ${username}`)
         }
 
@@ -167,7 +154,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         const internalUser = findInternalUser(username, password)
 
         if (internalUser) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log(`[DEBUG] Internal user authenticated: ${username}`)
             }
             req.user = internalUser
@@ -175,13 +162,13 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
             return
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Trying Audiobookshelf authentication for: ${username}`)
         }
 
         const user = await loginToAudiobookshelf(username, password)
         if (user) {
-            if (process.env.NODE_ENV === 'development') {
+            if (isDevelopment) {
                 console.log(`[DEBUG] Audiobookshelf user authenticated: ${username}`)
             }
             req.user = user
@@ -189,7 +176,7 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
             return
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopment) {
             console.log(`[DEBUG] Authentication failed for user: ${username}`)
         }
         res.set('WWW-Authenticate', 'Basic realm="OPDS"')
@@ -197,9 +184,6 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
         return
     } catch (error) {
         console.error('Authentication error:', error)
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[DEBUG] Authentication exception: ${error}`)
-        }
         res.set('WWW-Authenticate', 'Basic realm="OPDS"')
         res.status(401).send('Authentication failed')
         return
@@ -252,41 +236,39 @@ function getLibraryItemsCacheKey(libraryId: string, user: InternalUser): string 
     return `${hash('sha1', `${user.name}:${user.apiKey}`)}:${libraryId}`
 }
 
-async function getLibraryItems(libraryId: string | string[], user: InternalUser) {
-    if (Array.isArray(libraryId)) {
-        return null
+/** Drops expired entries so the cache cannot grow without bound. */
+function pruneLibraryItemsCache(): void {
+    const now = Date.now()
+    for (const [key, entry] of libraryItemsCache) {
+        if (now - entry.timestamp >= cacheExpirationMs) {
+            libraryItemsCache.delete(key)
+        }
     }
-    const cacheKey = getLibraryItemsCacheKey(libraryId, user)
+}
 
-    if (libraryItemsCache[cacheKey] && Date.now() - libraryItemsCache[cacheKey].timestamp < CACHE_EXPIRATION) {
-        return libraryItemsCache[cacheKey].data
+async function getLibraryItems(libraryId: string, user: InternalUser) {
+    pruneLibraryItemsCache()
+
+    const cacheKey = getLibraryItemsCacheKey(libraryId, user)
+    const cached = libraryItemsCache.get(cacheKey)
+    if (cached) {
+        return cached.data
     }
 
     const items = await apiCall(`/libraries/${encodeURIComponent(libraryId)}/items`, user)
-    libraryItemsCache[cacheKey] = { timestamp: Date.now(), data: items }
+    libraryItemsCache.set(cacheKey, { timestamp: Date.now(), data: items })
     return items
 }
 
-async function libraryHasVisibleItems(libraryId: string | string[], user: InternalUser): Promise<boolean> {
-    if (Array.isArray(libraryId)) {
-        return false
-    }
+async function libraryHasVisibleItems(libraryId: string, user: InternalUser): Promise<boolean> {
     if (showAudioBooks) return true
 
     const items = await getLibraryItems(libraryId, user)
     return parseItems(items).length > 0
 }
 
-async function ensureLibraryIsVisible(
-    libraryId: string | string[],
-    user: InternalUser,
-    res: Response
-): Promise<boolean> {
-    if (Array.isArray(libraryId)) {
-        return false
-    }
-
-    if (await libraryHasVisibleItems(libraryId as string, user)) {
+async function ensureLibraryIsVisible(libraryId: string, user: InternalUser, res: Response): Promise<boolean> {
+    if (await libraryHasVisibleItems(libraryId, user)) {
         return true
     }
 
@@ -346,17 +328,21 @@ app.get('/opds', authenticateUser, async (req: Request, res: Response) => {
 app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res: Response) => {
     const user = req.user!
     const lang = req.headers['accept-language']
+    const libraryId = getRouteParam(req, 'libraryId', res)
+    if (libraryId === null) {
+        return
+    }
 
-    if (!(await ensureLibraryIsVisible(req.params.libraryId, user, res))) {
+    if (!(await ensureLibraryIsVisible(libraryId, user, res))) {
         return
     }
 
     if (req.query.categories) {
         res.type('application/xml').send(
             buildOPDSXMLSkeleton(
-                `urn:uuid:${req.params.libraryId}`,
+                `urn:uuid:${libraryId}`,
                 `Categories`,
-                buildCategoryEntries(req.params.libraryId, user, lang, enabledOPDSCategories)
+                buildCategoryEntries(libraryId, user, lang, enabledOPDSCategories)
             )
         )
         return
@@ -367,9 +353,9 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
         return
     }
 
-    const items = await getLibraryItems(req.params.libraryId, user)
+    const items = await getLibraryItems(libraryId, user)
 
-    const library: Library = await apiCall(`/libraries/${encodeURIComponent(req.params.libraryId as string)}`, user)
+    const library: Library = await apiCall(`/libraries/${encodeURIComponent(libraryId)}`, user)
 
     let parsedItems: LibraryItem[] = parseItems(items)
 
@@ -383,14 +369,12 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
     }
 
     // Filter based on query, author, or title if provided. Search terms are
-    // matched as literal substrings rather than compiled to regular expressions:
-    // a user-supplied pattern could otherwise backtrack catastrophically and
-    // stall the single-threaded process, or fail to parse and return a 500.
+    // matched as literal substrings rather than compiled to regular expressions.
     const typeParam = typeof req.query.type === 'string' ? req.query.type : undefined
     const nameTerm = normalizeSearchTerm(req.query.name)
     const queryTerm = normalizeSearchTerm(req.query.q)
 
-    if (typeParam && isNameCategory(typeParam) && nameTerm) {
+    if (typeParam && isOpdsNameCategory(typeParam) && nameTerm) {
         parsedItems = parsedItems.filter((item) => matchesNameCategory(item, typeParam, nameTerm))
     } else if (queryTerm) {
         parsedItems = parsedItems.filter((item) => matchesFreeText(item, queryTerm))
@@ -412,7 +396,6 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
 
     // Pagination
     const page = Math.max(0, parseInt(req.query.page as string) || 0)
-    const pageSize = process.env.OPDS_PAGE_SIZE ? parseInt(process.env.OPDS_PAGE_SIZE) : 20
     const startIndex = Math.min(page * pageSize, parsedItems.length)
     const endIndex = Math.min(startIndex + pageSize, parsedItems.length)
     const paginatedItems = parsedItems.slice(startIndex, endIndex)
@@ -420,7 +403,7 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
 
     res.type('application/xml').send(
         buildOPDSXMLSkeleton(
-            `urn:uuid:${req.params.libraryId}`,
+            `urn:uuid:${libraryId}`,
             `${library.name}`,
             buildItemEntries(paginatedItems, user),
             library,
@@ -434,23 +417,31 @@ app.get('/opds/libraries/:libraryId', authenticateUser, async (req: Request, res
 
 app.get('/opds/libraries/:libraryId/search-definition', authenticateUser, async (req: Request, res: Response) => {
     const user = req.user!
-
-    if (!(await ensureLibraryIsVisible(req.params.libraryId, user, res))) {
+    const libraryId = getRouteParam(req, 'libraryId', res)
+    if (libraryId === null) {
         return
     }
 
-    res.type('application/xml').send(buildSearchDefinition(req.params.libraryId, user))
+    if (!(await ensureLibraryIsVisible(libraryId, user, res))) {
+        return
+    }
+
+    res.type('application/xml').send(buildSearchDefinition(libraryId, user))
 })
 
 app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Request, res: Response) => {
     const user = req.user!
-
-    if (!(await ensureLibraryIsVisible(req.params.libraryId, user, res))) {
+    const libraryId = getRouteParam(req, 'libraryId', res)
+    if (libraryId === null) {
         return
     }
 
-    const category = getRouteCategory(req.params.type)
-    if (!category || category === 'all' || category === 'recent') {
+    if (!(await ensureLibraryIsVisible(libraryId, user, res))) {
+        return
+    }
+
+    const category = req.params.type
+    if (!isOpdsNameCategory(category)) {
         res.status(400).send('Invalid type')
         return
     }
@@ -459,36 +450,26 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
         return
     }
 
-    const items = await getLibraryItems(req.params.libraryId, user)
+    const items = await getLibraryItems(libraryId, user)
 
-    const library: Library = await apiCall(`/libraries/${encodeURIComponent(req.params.libraryId as string)}`, user)
+    const library: Library = await apiCall(`/libraries/${encodeURIComponent(libraryId)}`, user)
 
     let parsedItems: LibraryItem[] = parseItems(items)
 
     let distinctType = new Set<string>()
     parsedItems.forEach((item: LibraryItem) => {
-        if (req.params.type === 'authors') {
-            item.authors.forEach((author: any) => {
-                distinctType.add(author.name.trim())
-            })
+        if (category === 'authors') {
+            item.authors.forEach((author) => distinctType.add(author.name.trim()))
         }
-        if (req.params.type === 'narrators') {
-            item.narrators.forEach((narrator: any) => {
-                distinctType.add(narrator.name.trim())
-            })
+        if (category === 'narrators') {
+            item.narrators.forEach((narrator) => distinctType.add(narrator.name.trim()))
         }
-        if (req.params.type === 'genres') {
-            item.genres.forEach((genre: any) => {
-                distinctType.add(genre.trim())
-            })
-            item.tags.forEach((tag: any) => {
-                distinctType.add(tag.trim())
-            })
+        if (category === 'genres') {
+            item.genres.forEach((genre: string) => distinctType.add(genre.trim()))
+            item.tags.forEach((tag: string) => distinctType.add(tag.trim()))
         }
-        if (req.params.type === 'series') {
-            item.series.forEach((series: any) => {
-                distinctType.add(series.trim())
-            })
+        if (category === 'series') {
+            item.series.forEach((series: string) => distinctType.add(series.trim()))
         }
     })
 
@@ -501,8 +482,7 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
     const countByStartLetter: Record<string, number> = Object.fromEntries(
         Object.entries(
             Object.groupBy(distinctTypeArray, (item) => {
-                const startLetter = item.charAt(0).toUpperCase()
-                const normalizedStartLetter = startLetter.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                const normalizedStartLetter = stripDiacritics(item.charAt(0).toUpperCase())
                 const isAtoZ = 'A' <= normalizedStartLetter && normalizedStartLetter <= 'Z'
                 return isAtoZ ? normalizedStartLetter : ''
             })
@@ -516,34 +496,39 @@ app.get('/opds/libraries/:libraryId/:type', authenticateUser, async (req: Reques
         const itemCards: { item: string; link: string }[] = Object.entries(countByStartLetter).map(
             ([letter, count]) => ({
                 item: `${letter.toUpperCase()} (${count})`,
-                link: `/opds/libraries/${library.id}/${req.params.type}?start=${letter.toLowerCase()}`
+                link: `/opds/libraries/${encodeURIComponent(library.id)}/${category}?start=${encodeURIComponent(letter.toLowerCase())}`
             })
         )
 
         res.type('application/xml').send(
-            buildOPDSXMLSkeleton(
-                `urn:uuid:${req.params.libraryId}`,
-                `${library.name}`,
-                buildCustomCardEntries(itemCards)
-            )
+            buildOPDSXMLSkeleton(`urn:uuid:${libraryId}`, `${library.name}`, buildCustomCardEntries(itemCards))
         )
         return
     }
     if (showCharCards) {
-        distinctTypeArray = distinctTypeArray.filter((item: string) => {
-            const startLetter = item.charAt(0).toLowerCase()
-            const normalizedStartLetter = startLetter.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            return normalizedStartLetter === req.query.start
-        })
+        const startLetterFilter = normalizeSearchTerm(req.query.start)
+        distinctTypeArray = distinctTypeArray.filter(
+            (item: string) => stripDiacritics(item.charAt(0).toLowerCase()) === startLetterFilter
+        )
     }
 
     res.type('application/xml').send(
         buildOPDSXMLSkeleton(
-            `urn:uuid:${req.params.libraryId}`,
+            `urn:uuid:${libraryId}`,
             `${library.name}`,
-            buildCardEntries(distinctTypeArray, req.params.type, user, req.params.libraryId)
+            buildCardEntries(distinctTypeArray, category, user, libraryId)
         )
     )
+})
+
+// Keep unexpected failures from leaking internals to OPDS clients.
+app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
+    console.error('Unhandled request error:', error)
+    if (!res.headersSent) {
+        res.status(500).type('text/plain').send('Internal Server Error')
+    } else {
+        res.end()
+    }
 })
 
 app.listen(port, () => {

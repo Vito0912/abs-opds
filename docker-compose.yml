@@ -15,3 +15,12 @@ services:
             - OPDS_CATEGORIES=all,recent,authors,narrators,genres,series
             - SHOW_AUDIOBOOKS=true
             - SHOW_CHAR_CARDS=true
+            # Serve covers and downloads through this container rather than
+            # linking straight to ABS. Needed when ABS is only reachable on the
+            # docker network. Requests are forwarded to ABS_URL only.
+            # - USE_PROXY=true
+            # Log in with credentials of your own instead of your ABS account.
+            # Format: username:ABS_API_TOKEN:password (all three required).
+            # - OPDS_USERS=reader:your-abs-api-token:choose-a-password
+            # How long library listings are cached, in seconds (default 3600).
+            # - CACHE_EXPIRATION=3600
